@@ -32,21 +32,21 @@
             color: #ffffff;
         }
 
-        /* 銀色金屬質感 (Chrome/Silver) */
+        /* 科技藍金屬質感 (Metallic Blue) */
         .metallic-text {
             background: linear-gradient(180deg,
-                    #f0f0f0 0%,
-                    #ffffff 20%,
-                    #cccccc 45%,
-                    #888888 50%,
-                    #aaaaaa 55%,
-                    #eeeeee 80%,
-                    #b0b0b0 100%);
+                    #e0f7fa 0%,
+                    #00e5ff 25%,
+                    #00b8d4 45%,
+                    #006064 50%,
+                    #00838f 55%,
+                    #00acc1 75%,
+                    #e0f7fa 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             /* 強制邊界光與立體感 */
-            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 2px rgba(0, 255, 255, 0.4));
         }
 
         .neon-text-finished {
@@ -131,13 +131,17 @@
 
         /* 讓計時數字最大化且置中 */
         #time-display {
-            font-size: min(30vw, 70vh);
-            /* Orbitron 比較寬，稍微縮一點點避溢出 */
+            font-size: min(25vw, 65vh);
+            /* 縮小以防止溢出 */
+            font-variant-numeric: tabular-nums;
+            /* 強制等寬數字，防止寬度跳動 */
+            font-feature-settings: "tnum";
             transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: flex;
             justify-content: center;
             align-items: center;
             width: 100%;
+            white-space: nowrap;
         }
 
         /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */

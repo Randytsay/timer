@@ -610,14 +610,15 @@
         function hideControls() {
             state.isControlsVisible = false;
             dom.controlsPanel.classList.add('controls-hidden');
-            // 控制列隱藏時，讓時間稍微往下移，更置中
-            dom.container.style.transform = 'translateY(10vh) scale(1.1)';
+            // 移除原本的 translateY(10vh)，確保在全螢幕時絕對置中
+            dom.container.style.transform = 'scale(1.1)';
         }
 
         function showControls() {
             state.isControlsVisible = true;
             dom.controlsPanel.classList.remove('controls-hidden');
-            dom.container.style.transform = 'translateY(0) scale(1)';
+            // 恢復原始比例，同樣保持置中
+            dom.container.style.transform = 'scale(1)';
         }
 
         function bindEvents() {

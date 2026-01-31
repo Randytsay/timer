@@ -7,8 +7,8 @@
     <title>平板專用倒數計時器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 引入 Orbitron 用於科技感數字，保留 Chakra Petch 用於介面文字 */
-        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Orbitron:wght@600;900&display=swap');
+        /* 引入多款科技感數字字型 */
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Orbitron:wght@600;900&family=Bebas+Neue&family=Michroma&family=JetBrains+Mono:wght@800&display=swap');
 
         body {
             font-family: 'Chakra Petch', sans-serif;
@@ -18,11 +18,34 @@
             touch-action: manipulation;
         }
 
-        /* Tech 科技感數字字體 */
-        .rounded-nums {
+        /* 字體類別定義 */
+        .font-orbitron {
             font-family: 'Orbitron', sans-serif;
             font-weight: 900;
             letter-spacing: -0.02em;
+        }
+
+        .font-bebas {
+            font-family: 'Bebas Neue', sans-serif;
+            font-weight: 400;
+            letter-spacing: 0.05em;
+        }
+
+        .font-michroma {
+            font-family: 'Michroma', sans-serif;
+            font-weight: 400;
+            letter-spacing: -0.05em;
+        }
+
+        .font-jetbrains {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+        }
+
+        .rounded-nums {
+            /* 預設繼承或由 JS 切換 */
+            transition: font-family 0.3s ease;
         }
 
         /* 霓虹文字效果 - 柔和版 */
@@ -240,21 +263,40 @@
                 </svg>
             </button>
 
-            <!-- 音效選擇 -->
-            <div id="sound-selector" class="flex flex-col items-start gap-2 ml-4">
-                <span class="text-xs text-cyan-400 font-bold tracking-widest uppercase opacity-60">Alarm Sound</span>
-                <div class="flex gap-2">
-                    <button id="btn-sound-default"
-                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold ring-1 ring-cyan-500/50 bg-cyan-500/10">和弦音效</button>
-                    <button id="btn-sound-thinking"
-                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">思考音效</button>
-                    <button id="btn-sound-entertainment"
-                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">時間綜藝</button>
-                    <button id="btn-sound-custom"
-                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">自訂音訊</button>
-                    <input type="file" id="audio-upload" accept="audio/*" class="hidden">
+            <!-- 音效與字型選擇區 -->
+            <div class="flex flex-col gap-4 ml-6">
+                <!-- 音效選擇 -->
+                <div id="sound-selector" class="flex flex-col items-start gap-2">
+                    <span class="text-[10px] text-cyan-400 font-bold tracking-widest uppercase opacity-60">Alarm
+                        Sound</span>
+                    <div class="flex gap-2">
+                        <button id="btn-sound-default"
+                            class="btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold">和弦</button>
+                        <button id="btn-sound-thinking"
+                            class="btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold">思考</button>
+                        <button id="btn-sound-entertainment"
+                            class="btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold">綜藝</button>
+                        <button id="btn-sound-custom"
+                            class="btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold opacity-50">自訂</button>
+                    </div>
+                </div>
+                <!-- 字型選擇 -->
+                <div id="font-selector" class="flex flex-col items-start gap-2">
+                    <span class="text-[10px] text-purple-400 font-bold tracking-widest uppercase opacity-60">Display
+                        Font</span>
+                    <div class="flex gap-2">
+                        <button class="font-switch btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                            data-font="orbitron">Orbitron</button>
+                        <button class="font-switch btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                            data-font="bebas">Bebas</button>
+                        <button class="font-switch btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                            data-font="michroma">Michroma</button>
+                        <button class="font-switch btn-glass px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                            data-font="jetbrains">JetBrains</button>
+                    </div>
                 </div>
             </div>
+            <input type="file" id="audio-upload" accept="audio/*" class="hidden">
         </div>
 
         <!-- 時間到專用按鈕 -->
@@ -319,6 +361,7 @@
             isControlsVisible: true,
             audioContext: null,
             audioMode: 'default', // 'default', 'thinking', 'entertainment', 'custom'
+            fontMode: 'orbitron', // 'orbitron', 'bebas', 'michroma', 'jetbrains'
             customBuffer: null,
             presets: {
                 thinking: { url: '思考音效.MP3', buffer: null },
@@ -546,6 +589,22 @@
                 activeBtn.classList.remove('opacity-50');
             }
 
+            // 更新字型選取按鈕
+            document.querySelectorAll('.font-switch').forEach(btn => {
+                const f = btn.dataset.font;
+                if (f === state.fontMode) {
+                    btn.classList.add('ring-1', 'ring-purple-500/50', 'bg-purple-500/10');
+                    btn.classList.remove('opacity-50');
+                } else {
+                    btn.classList.remove('ring-1', 'ring-purple-500/50', 'bg-purple-500/10');
+                    btn.classList.add('opacity-50');
+                }
+            });
+
+            // 套用字型到顯示器
+            dom.display.classList.remove('font-orbitron', 'font-bebas', 'font-michroma', 'font-jetbrains');
+            dom.display.classList.add(`font-${state.fontMode}`);
+
             if (state.status === 'FINISHED') {
                 dom.setupControls.classList.add('hidden-force');
                 dom.mainActionBtn.parentElement.classList.add('hidden-force');
@@ -761,6 +820,17 @@
                 }
             });
 
+            // 字型切換
+            document.querySelectorAll('.font-switch').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    state.fontMode = btn.dataset.font;
+                    audioEngine.playBeep();
+                    updateControlsUI();
+                    localStorage.setItem('tablet_timer_font_mode', state.fontMode);
+                });
+            });
+
             // Modal Logic
             dom.display.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -817,8 +887,14 @@
             const savedAudioMode = localStorage.getItem('tablet_timer_audio_mode');
             if (savedAudioMode) {
                 state.audioMode = savedAudioMode;
-                updateControlsUI();
             }
+
+            const savedFontMode = localStorage.getItem('tablet_timer_font_mode');
+            if (savedFontMode) {
+                state.fontMode = savedFontMode;
+            }
+
+            updateControlsUI();
         }
 
         window.addEventListener('beforeunload', () => {

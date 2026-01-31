@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>平板專用倒數計時器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 引入圓潤字體 Nunito 用於數字，保留 Chakra Petch 用於介面文字 */
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Nunito:wght@800;1000&display=swap');
+
+        body {
+            font-family: 'Chakra Petch', sans-serif;
+            background-color: #050505;
+            color: #e0e0e0;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        /* 數字專用圓潤字體 */
+        .rounded-nums {
+            font-family: 'Nunito', sans-serif;
+            font-weight: 900;
+            /* Extra Black */
+        }
+
+        /* 霓虹文字效果 - 柔和版 */
+        .neon-text {
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.4),
+                0 0 20px rgba(0, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        .neon-text-finished {
+            text-shadow: 0 0 15px rgba(255, 80, 80, 0.9),
+                0 0 30px rgba(255, 80, 80, 0.6);
+            color: #ffcccc;
+        }
+
+        /* 按鈕樣式 */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .btn-glass:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.92);
+        }
+
+        /* 控制列過渡動畫 */
+        .controls-panel {
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
+        }
+
+        .controls-hidden {
+            transform: translateY(120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hidden-force {
+            display: none !important;
+        }
+
+        /* 移除預設的 input number 上下箭頭 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* 全螢幕霓虹外框 */
+        #neon-border {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 100;
+            border: 12px solid transparent;
+            transition: all 1s ease;
+            opacity: 0;
+            box-sizing: border-box;
+        }
+
+        .border-running {
+            opacity: 1 !important;
+            animation: border-breathe 3s ease-in-out infinite;
+        }
+
+        @keyframes border-breathe {
+
+            0%,
+            100% {
+                border-width: 6px;
+                filter: brightness(1);
+            }
+
+            50% {
+                border-width: 12px;
+                filter: brightness(1.3);
+            }
+        }
+
+        /* 讓計時數字最大化且置中 */
+        #time-display {
+            font-size: min(26vw, 55vh);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
+        .display-running {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body class="h-screen w-screen flex flex-col items-center justify-center relative select-none bg-[#0a0a0a]">
+
+    <!-- 全螢幕霓虹外框 -->
+    <div id="neon-border"></div>
+
+    <!-- 主顯示區域 (極大化) -->
+    <div id="main-container"
+        class="relative w-full h-[80vh] flex flex-col items-center justify-center transition-all duration-500 z-10">
+
+        <!-- 時間顯示 -->
+        <!-- 修改：使用 rounded-nums 字體，尺寸加大到 32vw -->
+        <div id="time-display"
+            class="rounded-nums text-[32vw] neon-text leading-none tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
+            05:00
+        </div>
+
+        <!-- 狀態文字 -->
+        <div id="status-text"
+            class="text-5xl mt-4 font-bold tracking-[0.2em] opacity-0 transition-opacity duration-300 text-red-500 rounded-nums">
+            TIME'S UP
+        </div>
+
+        <!-- 進度條 (底部全寬) -->
+        <div class="absolute bottom-0 left-0 h-2 bg-cyan-400 shadow-[0_0_15px_#00ffff] transition-all duration-1000 w-full"
+            id="progress-bar"></div>
+    </div>
+
+    <!-- 底部控制面板 -->
+    <div id="controls-panel"
+        class="controls-panel fixed bottom-0 w-full h-[35vh] bg-gradient-to-t from-black via-black/95 to-transparent flex flex-col items-center justify-end pb-10 z-20">
+
+        <!-- 快速加減/輸入區 -->
+        <div id="setup-controls" class="flex items-center gap-4 mb-6">
+            <button id="btn-minus"
+                class="btn-glass w-16 h-16 rounded-full text-4xl text-cyan-300 flex items-center justify-center pb-2 font-bold">-</button>
+            <div class="flex gap-3">
+                <button class="quick-add btn-glass px-5 py-3 rounded-2xl text-lg font-bold tracking-wide"
+                    data-add="30">+30秒</button>
+                <button class="quick-add btn-glass px-5 py-3 rounded-2xl text-lg font-bold tracking-wide"
+                    data-add="60">+1分</button>
+                <button class="quick-add btn-glass px-5 py-3 rounded-2xl text-lg font-bold tracking-wide"
+                    data-add="300">+5分</button>
+            </div>
+            <button id="btn-plus"
+                class="btn-glass w-16 h-16 rounded-full text-4xl text-cyan-300 flex items-center justify-center pb-2 font-bold">+</button>
+        </div>
+
+        <!-- 主要操作按鈕區 -->
+        <div class="flex items-center gap-10">
+
+            <!-- 重置 -->
+            <button id="btn-reset"
+                class="btn-glass px-8 py-4 rounded-full text-red-300 border-red-900/40 hover:bg-red-900/20 flex items-center gap-3 transition-all active:scale-95 group">
+                <svg class="group-hover:-rotate-90 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg"
+                    width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74-2.74L3 12" />
+                </svg>
+                <span class="text-xl font-bold">重置</span>
+            </button>
+
+            <!-- 開始/暫停 (主按鈕加大) -->
+            <button id="btn-main-action"
+                class="w-28 h-28 rounded-full bg-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.6)] hover:bg-cyan-400 active:scale-90 transition-all flex items-center justify-center text-white ring-4 ring-cyan-900/50">
+                <svg id="icon-play" class="w-14 h-14 ml-2" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+                <svg id="icon-pause" class="w-14 h-14 hidden-force" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+            </button>
+
+            <!-- 佔位符 -->
+            <div class="w-[140px]"></div>
+        </div>
+
+        <!-- 時間到專用按鈕 -->
+        <div id="finished-controls"
+            class="hidden-force flex items-center gap-6 w-full justify-center absolute bottom-12 left-0">
+            <button id="btn-back-settings"
+                class="btn-glass px-8 py-4 rounded-2xl text-xl font-bold flex items-center gap-3 text-gray-300 border-gray-600">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                返回
+            </button>
+            <button id="btn-restart"
+                class="bg-red-600 hover:bg-red-500 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-[0_0_20px_rgba(220,38,38,0.6)] flex items-center gap-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M23 4v6h-6" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                重來
+            </button>
+        </div>
+    </div>
+
+    <!-- 時間輸入 Modal (支援分:秒) -->
+    <div id="input-modal"
+        class="fixed inset-0 bg-black/90 z-50 hidden-force flex items-center justify-center backdrop-blur-md">
+        <div
+            class="bg-gray-900 border border-gray-700 p-8 rounded-[2rem] w-[500px] text-center shadow-2xl transform scale-100 transition-transform">
+            <h3 class="text-2xl text-cyan-400 mb-8 font-bold tracking-wide">設定時間</h3>
+
+            <div class="flex items-center justify-center gap-4 mb-8">
+                <div class="flex flex-col">
+                    <input type="number" id="input-min"
+                        class="rounded-nums w-40 bg-gray-800 text-white text-7xl text-center p-4 rounded-2xl border-2 border-gray-600 focus:border-cyan-500 focus:outline-none focus:bg-gray-800 transition-colors placeholder-gray-600"
+                        placeholder="00">
+                    <span class="text-gray-500 text-sm mt-2 font-bold">分</span>
+                </div>
+                <span class="text-6xl text-gray-600 -mt-8">:</span>
+                <div class="flex flex-col">
+                    <input type="number" id="input-sec"
+                        class="rounded-nums w-40 bg-gray-800 text-white text-7xl text-center p-4 rounded-2xl border-2 border-gray-600 focus:border-cyan-500 focus:outline-none focus:bg-gray-800 transition-colors placeholder-gray-600"
+                        placeholder="00">
+                    <span class="text-gray-500 text-sm mt-2 font-bold">秒</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6">
+                <button id="btn-modal-cancel"
+                    class="btn-glass py-4 rounded-2xl text-gray-400 text-xl font-bold hover:bg-white/5">取消</button>
+                <button id="btn-modal-confirm"
+                    class="bg-cyan-600 hover:bg-cyan-500 text-white py-4 rounded-2xl font-bold text-xl shadow-lg shadow-cyan-900/50">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            totalSeconds: 300,
+            remainingSeconds: 300,
+            intervalId: null,
+            status: 'IDLE',
+            isControlsVisible: true,
+            audioContext: null
+        };
+
+        const dom = {
+            container: document.getElementById('main-container'),
+            display: document.getElementById('time-display'),
+            statusText: document.getElementById('status-text'),
+            progressBar: document.getElementById('progress-bar'),
+            controlsPanel: document.getElementById('controls-panel'),
+            setupControls: document.getElementById('setup-controls'),
+            mainActionBtn: document.getElementById('btn-main-action'),
+            resetBtn: document.getElementById('btn-reset'),
+            iconPlay: document.getElementById('icon-play'),
+            iconPause: document.getElementById('icon-pause'),
+            finishedControls: document.getElementById('finished-controls'),
+            btnRestart: document.getElementById('btn-restart'),
+            btnBack: document.getElementById('btn-back-settings'),
+            // Inputs
+            modal: document.getElementById('input-modal'),
+            inputMin: document.getElementById('input-min'),
+            inputSec: document.getElementById('input-sec'),
+            neonBorder: document.getElementById('neon-border')
+        };
+
+        const audioEngine = {
+            ctx: null,
+            reverbNode: null,
+
+            async init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.reverbNode = await this.createReverb();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            async createReverb() {
+                const len = this.ctx.sampleRate * 1.5;
+                const buffer = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < len; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+                    }
+                }
+                const convolver = this.ctx.createConvolver();
+                convolver.buffer = buffer;
+                convolver.connect(this.ctx.destination);
+                return convolver;
+            },
+
+            playBeep() {
+                this.init();
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, t);
+                osc.frequency.exponentialRampToValueAtTime(1000, t + 0.05);
+
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.1, t + 0.005);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.reverbNode || this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.1);
+            },
+
+            playAlarm() {
+                this.init();
+                const t = this.ctx.currentTime;
+                const freqs = [261.63, 329.63, 392.00, 523.25]; // C-E-G-C (C Major Chord)
+
+                freqs.forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    const filter = this.ctx.createBiquadFilter();
+
+                    osc.type = i % 2 === 0 ? 'triangle' : 'sine';
+                    osc.frequency.setValueAtTime(f, t);
+
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(2000, t);
+                    filter.frequency.exponentialRampToValueAtTime(500, t + 2);
+
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.15, t + 0.2);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.reverbNode || this.ctx.destination);
+
+                    osc.start(t);
+                    osc.stop(t + 3);
+                });
+            }
+        };
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateDisplay() {
+            dom.display.textContent = formatTime(state.remainingSeconds);
+            const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) * 100 : 0;
+            dom.progressBar.style.width = `${pct}%`;
+
+            // 更新外框顏色與呼吸效果
+            if (state.status === 'RUNNING') {
+                dom.neonBorder.classList.add('border-running');
+                dom.display.classList.add('display-running');
+
+                // 根據進度改變顏色
+                let color = '#22d3ee'; // cyan-400
+                if (pct < 20) color = '#ef4444'; // red-500
+                else if (pct < 50) color = '#f59e0b'; // amber-500
+
+                dom.neonBorder.style.borderColor = color;
+                dom.neonBorder.style.boxShadow = `inset 0 0 30px ${color}, 0 0 30px ${color}`;
+                dom.progressBar.style.backgroundColor = color;
+                dom.progressBar.style.boxShadow = `0 0 15px ${color}`;
+
+                dom.display.classList.remove('neon-text-finished');
+                dom.display.style.color = '#ffffff';
+                dom.statusText.style.opacity = '0';
+            } else if (state.status === 'FINISHED') {
+                dom.neonBorder.classList.add('border-running');
+                dom.neonBorder.style.borderColor = '#ff5050';
+                dom.neonBorder.style.boxShadow = `inset 0 0 50px #ff5050, 0 0 50px #ff5050`;
+
+                dom.display.classList.add('neon-text-finished');
+                dom.statusText.style.opacity = '1';
+                dom.progressBar.style.width = '0%';
+                dom.display.classList.remove('display-running');
+            } else {
+                dom.neonBorder.classList.remove('border-running');
+                dom.neonBorder.style.borderColor = 'transparent';
+                dom.neonBorder.style.boxShadow = 'none';
+                dom.display.classList.remove('display-running');
+                dom.display.classList.remove('neon-text-finished');
+                dom.statusText.style.opacity = '0';
+            }
+        }
+
+        function updateControlsUI() {
+            if (state.status === 'RUNNING') {
+                dom.iconPlay.classList.add('hidden-force');
+                dom.iconPause.classList.remove('hidden-force');
+                dom.setupControls.classList.add('hidden-force');
+                dom.resetBtn.classList.remove('opacity-0', 'pointer-events-none');
+            } else if (state.status === 'PAUSED') {
+                dom.iconPlay.classList.remove('hidden-force');
+                dom.iconPause.classList.add('hidden-force');
+                dom.setupControls.classList.add('hidden-force');
+            } else if (state.status === 'IDLE') {
+                dom.iconPlay.classList.remove('hidden-force');
+                dom.iconPause.classList.add('hidden-force');
+                dom.setupControls.classList.remove('hidden-force');
+            }
+
+            if (state.status === 'FINISHED') {
+                dom.setupControls.classList.add('hidden-force');
+                dom.mainActionBtn.parentElement.classList.add('hidden-force');
+                dom.finishedControls.classList.remove('hidden-force');
+            } else {
+                dom.finishedControls.classList.add('hidden-force');
+                dom.mainActionBtn.parentElement.classList.remove('hidden-force');
+            }
+        }
+
+        function startTimer() {
+            if (state.remainingSeconds <= 0) return;
+            state.status = 'RUNNING';
+            audioEngine.init();
+            updateControlsUI();
+            updateDisplay();
+            hideControls(); // 開始後自動隱藏控制列
+            state.intervalId = setInterval(() => {
+                state.remainingSeconds--;
+                updateDisplay();
+                if (state.remainingSeconds <= 0) {
+                    finishTimer();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            clearInterval(state.intervalId);
+            state.status = 'PAUSED';
+            updateControlsUI();
+            updateDisplay();
+            showControls(); // 暫停時自動顯示控制列
+        }
+
+        function resetTimer() {
+            clearInterval(state.intervalId);
+            state.remainingSeconds = state.totalSeconds;
+            state.status = 'IDLE';
+            updateControlsUI();
+            updateDisplay();
+            showControls();
+        }
+
+        function finishTimer() {
+            clearInterval(state.intervalId);
+            state.status = 'FINISHED';
+            state.remainingSeconds = 0;
+            updateDisplay();
+            updateControlsUI();
+            showControls();
+            audioEngine.playAlarm();
+        }
+
+        function toggleControls() {
+            if (state.status === 'FINISHED') {
+                showControls();
+                return;
+            }
+            state.isControlsVisible ? hideControls() : showControls();
+        }
+
+        function hideControls() {
+            state.isControlsVisible = false;
+            dom.controlsPanel.classList.add('controls-hidden');
+            // 控制列隱藏時，讓時間稍微往下移，更置中
+            dom.container.style.transform = 'translateY(10vh) scale(1.1)';
+        }
+
+        function showControls() {
+            state.isControlsVisible = true;
+            dom.controlsPanel.classList.remove('controls-hidden');
+            dom.container.style.transform = 'translateY(0) scale(1)';
+        }
+
+        function bindEvents() {
+            document.body.addEventListener('click', (e) => {
+                if (dom.modal.contains(e.target) && !dom.modal.classList.contains('hidden-force')) return;
+                toggleControls();
+            });
+
+            dom.controlsPanel.addEventListener('click', (e) => e.stopPropagation());
+
+            dom.mainActionBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // 請求全螢幕 (必須在使用者點擊事件中觸發)
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log("Fullscreen request failed", err);
+                    });
+                }
+
+                if (state.status === 'RUNNING') {
+                    pauseTimer();
+                } else {
+                    startTimer();
+                }
+            });
+
+            dom.resetBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                audioEngine.playBeep();
+                resetTimer();
+            });
+
+            // 快速加時間 (支援秒數)
+            document.querySelectorAll('.quick-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    audioEngine.playBeep();
+                    const secondsToAdd = parseInt(btn.dataset.add);
+                    state.totalSeconds += secondsToAdd;
+                    state.remainingSeconds = state.totalSeconds;
+                    updateDisplay();
+                });
+            });
+
+            // +/- 按鈕
+            const adjustTime = (deltaSec) => {
+                let newTime = state.totalSeconds + deltaSec;
+                if (newTime < 0) newTime = 0;
+                if (newTime > 5999) newTime = 5999;
+                state.totalSeconds = newTime;
+                state.remainingSeconds = state.totalSeconds;
+                updateDisplay();
+            };
+
+            ['btn-plus', 'btn-minus'].forEach(id => {
+                const btn = document.getElementById(id);
+                let pressTimer;
+                const delta = id === 'btn-plus' ? 10 : -10;
+
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    audioEngine.playBeep();
+                    adjustTime(delta);
+                });
+                btn.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    pressTimer = setInterval(() => adjustTime(delta), 100);
+                });
+                btn.addEventListener('mouseup', () => clearInterval(pressTimer));
+                btn.addEventListener('mouseleave', () => clearInterval(pressTimer));
+                btn.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                    pressTimer = setInterval(() => adjustTime(delta), 100);
+                }, { passive: false });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    clearInterval(pressTimer);
+                });
+            });
+
+            dom.btnRestart.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.status = 'IDLE';
+                state.remainingSeconds = state.totalSeconds;
+                updateControlsUI();
+                startTimer();
+            });
+
+            dom.btnBack.addEventListener('click', (e) => {
+                e.stopPropagation();
+                resetTimer();
+            });
+
+            // Modal Logic
+            dom.display.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.status === 'IDLE') {
+                    const min = Math.floor(state.totalSeconds / 60);
+                    const sec = state.totalSeconds % 60;
+                    dom.inputMin.value = min.toString().padStart(2, '0');
+                    dom.inputSec.value = sec.toString().padStart(2, '0');
+
+                    dom.modal.classList.remove('hidden-force');
+                    dom.inputMin.focus();
+                    dom.inputMin.select();
+                }
+            });
+
+            document.getElementById('btn-modal-cancel').addEventListener('click', (e) => {
+                e.stopPropagation();
+                dom.modal.classList.add('hidden-force');
+            });
+
+            document.getElementById('btn-modal-confirm').addEventListener('click', (e) => {
+                e.stopPropagation();
+                let m = parseInt(dom.inputMin.value) || 0;
+                let s = parseInt(dom.inputSec.value) || 0;
+
+                // 限制
+                if (m < 0) m = 0;
+                if (s < 0) s = 0;
+                if (s > 59) s = 59; // 通常輸入秒數不超過 59
+
+                const newTotal = m * 60 + s;
+                if (newTotal > 0) {
+                    state.totalSeconds = newTotal;
+                    state.remainingSeconds = state.totalSeconds;
+                    updateDisplay();
+                }
+                dom.modal.classList.add('hidden-force');
+            });
+
+            // 自動跳轉 Input
+            dom.inputMin.addEventListener('input', (e) => {
+                if (dom.inputMin.value.length >= 2) {
+                    dom.inputSec.focus();
+                    dom.inputSec.select();
+                }
+            });
+
+            const savedTime = localStorage.getItem('tablet_timer_seconds');
+            if (savedTime) {
+                state.totalSeconds = parseInt(savedTime);
+                state.remainingSeconds = state.totalSeconds;
+            }
+        }
+
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('tablet_timer_seconds', state.totalSeconds);
+        });
+
+        function init() {
+            updateDisplay();
+            updateControlsUI();
+            bindEvents();
+            // 預先初始化音效引擎（生成空間殘響）
+            audioEngine.init();
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

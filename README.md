@@ -13,12 +13,12 @@
 
 ## 檔案說明
 
-- `timer.html`: 全新極致視聽版（推薦使用）。
+- `index.html`: 全新極致視聽版（推薦使用）。
 - `平板倒數計時器.html`: 原始穩定版本。
 
 ## 使用方式
 
-直接使用現代瀏覽器（如 Chrome, Edge, Safari）開啟 `timer.html` 即可使用。
+直接使用現代瀏覽器（如 Chrome, Edge, Safari）開啟 `index.html` 即可使用。
 
 ---
 Developed with ❤️ for high-performance tablet display.

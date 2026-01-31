@@ -221,6 +221,20 @@
             transform: scale(1.05);
         }
 
+        /* 時鐘模式：稍微縮小字體以容納 HH:MM:SS */
+        .clock-mode-text {
+            font-size: min(18vw, 50vh) !important;
+        }
+
+        /* 直式時鐘模式優化 */
+        @media (orientation: portrait) {
+            .clock-mode-text {
+                font-size: min(35vw, 30vh) !important;
+                gap: 2vh !important;
+                /* 時鐘模式直式間距稍縮 */
+            }
+        }
+
         /* 手機版面適配 */
         @media (max-width: 768px) {
             #controls-panel {
@@ -796,11 +810,14 @@
             state.clockIntervalId = setInterval(updateClock, 1000);
             dom.timeHour.classList.remove('hidden-force');
             dom.timeSepHour.classList.remove('hidden-force');
+            dom.display.classList.add('clock-mode-text'); // Add Smaller Font Class
+
             // Hide Timer Controls
             dom.setupControls.classList.add('hidden-force');
-            dom.mainActionBtn.parentElement.classList.add('hidden-force'); // Hide Main Button Wrapper
+            dom.mainActionBtn.classList.add('hidden-force'); // Hide Main Button ONLY
             dom.resetBtn.classList.add('hidden-force');
             dom.finishedControls.classList.add('hidden-force');
+            // Note: We keep the parent container and aesthetic controls visible
 
             dom.btnModeToggle.innerHTML = `
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -816,8 +833,11 @@
             clearInterval(state.clockIntervalId);
             dom.timeHour.classList.add('hidden-force');
             dom.timeSepHour.classList.add('hidden-force');
+            dom.display.classList.remove('clock-mode-text'); // Remove Smaller Font Class
+
             // Restore Timer Controls (Visibility handled by updateControlsUI)
-            dom.mainActionBtn.parentElement.classList.remove('hidden-force');
+            dom.mainActionBtn.classList.remove('hidden-force');
+            dom.resetBtn.classList.remove('hidden-force');
             dom.resetBtn.classList.remove('hidden-force');
 
             dom.btnModeToggle.innerHTML = `

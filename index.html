@@ -133,11 +133,6 @@
             box-sizing: border-box;
         }
 
-        .border-running {
-            opacity: 1 !important;
-            animation: border-breathe 3s ease-in-out infinite;
-        }
-
         @keyframes border-breathe {
 
             0%,
@@ -147,9 +142,42 @@
             }
 
             50% {
-                border-width: 12px;
-                filter: brightness(1.3);
+                border-width: 14px;
+                filter: brightness(1.5);
             }
+        }
+
+        /* 幻彩循環動畫 */
+        @keyframes border-color-cycle {
+            0% {
+                border-color: #00ffff;
+                box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
+            }
+
+            25% {
+                border-color: #ff00ff;
+                box-shadow: inset 0 0 30px #ff00ff, 0 0 30px #ff00ff;
+            }
+
+            50% {
+                border-color: #ffff00;
+                box-shadow: inset 0 0 30px #ffff00, 0 0 30px #ffff00;
+            }
+
+            75% {
+                border-color: #00ff00;
+                box-shadow: inset 0 0 30px #00ff00, 0 0 30px #00ff00;
+            }
+
+            100% {
+                border-color: #00ffff;
+                box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
+            }
+        }
+
+        .border-running {
+            opacity: 1 !important;
+            animation: border-breathe 3s ease-in-out infinite, border-color-cycle 8s linear infinite;
         }
 
         /* 讓計時數字最大化且置中 */
@@ -522,13 +550,12 @@
                 dom.neonBorder.classList.add('border-running');
                 dom.display.classList.add('display-running');
 
-                // 根據進度改變顏色
+                // 根據進度改變顏色 (僅進度條)
                 let color = '#22d3ee'; // cyan-400
                 if (pct < 20) color = '#ef4444'; // red-500
                 else if (pct < 50) color = '#f59e0b'; // amber-500
 
-                dom.neonBorder.style.borderColor = color;
-                dom.neonBorder.style.boxShadow = `inset 0 0 30px ${color}, 0 0 30px ${color}`;
+                // 外框現在使用 CSS 動畫自動循環顏色，這裡不再覆蓋
                 dom.progressBar.style.backgroundColor = color;
                 dom.progressBar.style.boxShadow = `0 0 15px ${color}`;
 
@@ -833,17 +860,21 @@
 
             // Modal Logic
             dom.display.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (state.status === 'IDLE') {
-                    const min = Math.floor(state.totalSeconds / 60);
-                    const sec = state.totalSeconds % 60;
-                    dom.inputMin.value = min.toString().padStart(2, '0');
-                    dom.inputSec.value = sec.toString().padStart(2, '0');
-
-                    dom.modal.classList.remove('hidden-force');
-                    dom.inputMin.focus();
-                    dom.inputMin.select();
+                // 如果是運行中或暫停中，點擊時間數字應該是切換控制面板，而不是打開設定
+                if (state.status !== 'IDLE') {
+                    // 不 call stopPropagation，讓事件冒泡到 body 觸發 toggleControls
+                    return;
                 }
+
+                e.stopPropagation();
+                const min = Math.floor(state.totalSeconds / 60);
+                const sec = state.totalSeconds % 60;
+                dom.inputMin.value = min.toString().padStart(2, '0');
+                dom.inputSec.value = sec.toString().padStart(2, '0');
+
+                dom.modal.classList.remove('hidden-force');
+                dom.inputMin.focus();
+                dom.inputMin.select();
             });
 
             document.getElementById('btn-modal-cancel').addEventListener('click', (e) => {

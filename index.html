@@ -29,12 +29,16 @@
             font-family: 'Bebas Neue', sans-serif;
             font-weight: 400;
             letter-spacing: 0.05em;
+            font-size: 1.2em;
+            /* 加大 */
         }
 
         .font-michroma {
             font-family: 'Michroma', sans-serif;
             font-weight: 400;
             letter-spacing: -0.05em;
+            font-size: 0.85em;
+            /* 縮小防止超出 */
         }
 
         .font-jetbrains {
@@ -241,9 +245,7 @@
             TIME'S UP
         </div>
 
-        <!-- 進度條 (底部全寬) -->
-        <div class="absolute bottom-0 left-0 h-2 bg-cyan-400 shadow-[0_0_15px_#00ffff] transition-all duration-1000 w-full"
-            id="progress-bar"></div>
+
     </div>
 
     <!-- 底部控制面板 -->
@@ -403,7 +405,6 @@
             timeMin: document.getElementById('time-min'),
             timeSec: document.getElementById('time-sec'),
             statusText: document.getElementById('status-text'),
-            progressBar: document.getElementById('progress-bar'),
             controlsPanel: document.getElementById('controls-panel'),
             setupControls: document.getElementById('setup-controls'),
             mainActionBtn: document.getElementById('btn-main-action'),
@@ -543,21 +544,15 @@
             dom.timeSec.textContent = s;
 
             const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) * 100 : 0;
-            dom.progressBar.style.width = `${pct}%`;
+
 
             // 更新外框顏色與呼吸效果
             if (state.status === 'RUNNING') {
                 dom.neonBorder.classList.add('border-running');
                 dom.display.classList.add('display-running');
 
-                // 根據進度改變顏色 (僅進度條)
-                let color = '#22d3ee'; // cyan-400
-                if (pct < 20) color = '#ef4444'; // red-500
-                else if (pct < 50) color = '#f59e0b'; // amber-500
-
                 // 外框現在使用 CSS 動畫自動循環顏色，這裡不再覆蓋
-                dom.progressBar.style.backgroundColor = color;
-                dom.progressBar.style.boxShadow = `0 0 15px ${color}`;
+
 
                 dom.display.classList.remove('neon-text-finished');
                 dom.display.style.color = '#ffffff';
@@ -569,7 +564,6 @@
 
                 dom.display.classList.add('neon-text-finished');
                 dom.statusText.style.opacity = '1';
-                dom.progressBar.style.width = '0%';
                 dom.display.classList.remove('display-running');
             } else {
                 dom.neonBorder.classList.remove('border-running');

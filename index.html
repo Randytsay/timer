@@ -144,6 +144,21 @@
             white-space: nowrap;
         }
 
+        /* 直向模式優化：分在上、秒在下 */
+        @media (orientation: portrait) {
+            #time-display {
+                flex-direction: column;
+                font-size: min(45vw, 40vh);
+                /* 在直式下字體可以更大 */
+                line-height: 0.9;
+            }
+
+            #time-sep {
+                display: none;
+                /* 隱藏冒號，靠上下位置區分 */
+            }
+        }
+
         /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
         .display-running {
             transform: scale(1.05);
@@ -163,8 +178,10 @@
         <!-- 時間顯示 -->
         <!-- 修改：加入 metallic-text -->
         <div id="time-display"
-            class="rounded-nums text-[32vw] neon-text metallic-text leading-none tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
-            05:00
+            class="rounded-nums neon-text metallic-text tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
+            <span id="time-min">05</span>
+            <span id="time-sep">:</span>
+            <span id="time-sec">00</span>
         </div>
 
         <!-- 狀態文字 -->
@@ -312,6 +329,8 @@
         const dom = {
             container: document.getElementById('main-container'),
             display: document.getElementById('time-display'),
+            timeMin: document.getElementById('time-min'),
+            timeSec: document.getElementById('time-sec'),
             statusText: document.getElementById('status-text'),
             progressBar: document.getElementById('progress-bar'),
             controlsPanel: document.getElementById('controls-panel'),
@@ -445,14 +464,13 @@
             }
         };
 
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-            const s = (seconds % 60).toString().padStart(2, '0');
-            return `${m}:${s}`;
-        }
 
         function updateDisplay() {
-            dom.display.textContent = formatTime(state.remainingSeconds);
+            const m = Math.floor(state.remainingSeconds / 60).toString().padStart(2, '0');
+            const s = (state.remainingSeconds % 60).toString().padStart(2, '0');
+            dom.timeMin.textContent = m;
+            dom.timeSec.textContent = s;
+
             const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) * 100 : 0;
             dom.progressBar.style.width = `${pct}%`;
 

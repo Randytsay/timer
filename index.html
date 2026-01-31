@@ -228,7 +228,11 @@
                 <span class="text-xs text-cyan-400 font-bold tracking-widest uppercase opacity-60">Alarm Sound</span>
                 <div class="flex gap-2">
                     <button id="btn-sound-default"
-                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold ring-1 ring-cyan-500/50 bg-cyan-500/10">預設和弦</button>
+                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold ring-1 ring-cyan-500/50 bg-cyan-500/10">和弦音效</button>
+                    <button id="btn-sound-thinking"
+                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">思考音效</button>
+                    <button id="btn-sound-entertainment"
+                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">時間綜藝</button>
                     <button id="btn-sound-custom"
                         class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">自訂音訊</button>
                     <input type="file" id="audio-upload" accept="audio/*" class="hidden">
@@ -297,8 +301,12 @@
             status: 'IDLE',
             isControlsVisible: true,
             audioContext: null,
-            audioMode: 'default', // 'default' or 'custom'
-            customBuffer: null
+            audioMode: 'default', // 'default', 'thinking', 'entertainment', 'custom'
+            customBuffer: null,
+            presets: {
+                thinking: { url: '思考音效.MP3', buffer: null },
+                entertainment: { url: '時間綜藝.MP3', buffer: null }
+            }
         };
 
         const dom = {
@@ -321,6 +329,8 @@
             inputSec: document.getElementById('input-sec'),
             neonBorder: document.getElementById('neon-border'),
             btnSoundDefault: document.getElementById('btn-sound-default'),
+            btnSoundThinking: document.getElementById('btn-sound-thinking'),
+            btnSoundEntertainment: document.getElementById('btn-sound-entertainment'),
             btnSoundCustom: document.getElementById('btn-sound-custom'),
             audioUpload: document.getElementById('audio-upload')
         };
@@ -375,13 +385,31 @@
                 osc.stop(t + 0.1);
             },
 
-            playAlarm() {
+            async playAlarm() {
                 this.init();
 
-                // 如果是自訂音效且有 Buffer
+                // 處理自訂與預設 MP3
+                let bufferToPlay = null;
+
                 if (state.audioMode === 'custom' && state.customBuffer) {
+                    bufferToPlay = state.customBuffer;
+                } else if (state.audioMode === 'thinking' || state.audioMode === 'entertainment') {
+                    const preset = state.presets[state.audioMode];
+                    if (!preset.buffer) {
+                        try {
+                            const response = await fetch(preset.url);
+                            const arrayBuffer = await response.arrayBuffer();
+                            preset.buffer = await this.ctx.decodeAudioData(arrayBuffer);
+                        } catch (e) {
+                            console.error("Failed to load preset audio", e);
+                        }
+                    }
+                    bufferToPlay = preset.buffer;
+                }
+
+                if (bufferToPlay) {
                     const source = this.ctx.createBufferSource();
-                    source.buffer = state.customBuffer;
+                    source.buffer = bufferToPlay;
                     source.connect(this.reverbNode || this.ctx.destination);
                     source.start(0);
                     return;
@@ -482,16 +510,22 @@
             }
 
             // 更新音效選取按鈕
-            if (state.audioMode === 'default') {
-                dom.btnSoundDefault.classList.add('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
-                dom.btnSoundDefault.classList.remove('opacity-50');
-                dom.btnSoundCustom.classList.remove('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
-                dom.btnSoundCustom.classList.add('opacity-50');
-            } else {
-                dom.btnSoundCustom.classList.add('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
-                dom.btnSoundCustom.classList.remove('opacity-50');
-                dom.btnSoundDefault.classList.remove('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
-                dom.btnSoundDefault.classList.add('opacity-50');
+            [dom.btnSoundDefault, dom.btnSoundThinking, dom.btnSoundEntertainment, dom.btnSoundCustom].forEach(btn => {
+                btn.classList.remove('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                btn.classList.add('opacity-50');
+            });
+
+            const activeBtnMap = {
+                'default': dom.btnSoundDefault,
+                'thinking': dom.btnSoundThinking,
+                'entertainment': dom.btnSoundEntertainment,
+                'custom': dom.btnSoundCustom
+            };
+
+            const activeBtn = activeBtnMap[state.audioMode];
+            if (activeBtn) {
+                activeBtn.classList.add('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                activeBtn.classList.remove('opacity-50');
             }
 
             if (state.status === 'FINISHED') {
@@ -664,8 +698,25 @@
             dom.btnSoundDefault.addEventListener('click', (e) => {
                 e.stopPropagation();
                 state.audioMode = 'default';
+                audioEngine.playBeep();
                 updateControlsUI();
                 localStorage.setItem('tablet_timer_audio_mode', 'default');
+            });
+
+            dom.btnSoundThinking.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.audioMode = 'thinking';
+                audioEngine.playBeep();
+                updateControlsUI();
+                localStorage.setItem('tablet_timer_audio_mode', 'thinking');
+            });
+
+            dom.btnSoundEntertainment.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.audioMode = 'entertainment';
+                audioEngine.playBeep();
+                updateControlsUI();
+                localStorage.setItem('tablet_timer_audio_mode', 'entertainment');
             });
 
             dom.btnSoundCustom.addEventListener('click', (e) => {

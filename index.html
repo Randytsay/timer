@@ -7,8 +7,8 @@
     <title>平板專用倒數計時器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 引入圓潤字體 Nunito 用於數字，保留 Chakra Petch 用於介面文字 */
-        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Nunito:wght@800;1000&display=swap');
+        /* 引入 Orbitron 用於科技感數字，保留 Chakra Petch 用於介面文字 */
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Orbitron:wght@600;900&display=swap');
 
         body {
             font-family: 'Chakra Petch', sans-serif;
@@ -18,11 +18,11 @@
             touch-action: manipulation;
         }
 
-        /* 數字專用圓潤字體 */
+        /* Tech 科技感數字字體 */
         .rounded-nums {
-            font-family: 'Nunito', sans-serif;
+            font-family: 'Orbitron', sans-serif;
             font-weight: 900;
-            /* Extra Black */
+            letter-spacing: -0.02em;
         }
 
         /* 霓虹文字效果 - 柔和版 */
@@ -32,20 +32,21 @@
             color: #ffffff;
         }
 
-        /* 金屬質感效果 */
+        /* 銀色金屬質感 (Chrome/Silver) */
         .metallic-text {
             background: linear-gradient(180deg,
-                    #ffffff 0%,
-                    #e0e0e0 35%,
-                    #999999 45%,
+                    #f0f0f0 0%,
+                    #ffffff 20%,
+                    #cccccc 45%,
                     #888888 50%,
                     #aaaaaa 55%,
-                    #d0d0d0 70%,
-                    #ffffff 100%);
+                    #eeeeee 80%,
+                    #b0b0b0 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4));
+            /* 強制邊界光與立體感 */
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
         }
 
         .neon-text-finished {
@@ -56,6 +57,7 @@
             -webkit-background-clip: unset;
             background-clip: unset;
             -webkit-text-fill-color: initial;
+            filter: none;
         }
 
         /* 按鈕樣式 */
@@ -129,7 +131,8 @@
 
         /* 讓計時數字最大化且置中 */
         #time-display {
-            font-size: min(35vw, 75vh);
+            font-size: min(30vw, 70vh);
+            /* Orbitron 比較寬，稍微縮一點點避溢出 */
             transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: flex;
             justify-content: center;

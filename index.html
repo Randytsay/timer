@@ -32,10 +32,30 @@
             color: #ffffff;
         }
 
+        /* 金屬質感效果 */
+        .metallic-text {
+            background: linear-gradient(180deg,
+                    #ffffff 0%,
+                    #e0e0e0 35%,
+                    #999999 45%,
+                    #888888 50%,
+                    #aaaaaa 55%,
+                    #d0d0d0 70%,
+                    #ffffff 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4));
+        }
+
         .neon-text-finished {
             text-shadow: 0 0 15px rgba(255, 80, 80, 0.9),
                 0 0 30px rgba(255, 80, 80, 0.6);
             color: #ffcccc;
+            background: none;
+            -webkit-background-clip: unset;
+            background-clip: unset;
+            -webkit-text-fill-color: initial;
         }
 
         /* 按鈕樣式 */
@@ -109,7 +129,7 @@
 
         /* 讓計時數字最大化且置中 */
         #time-display {
-            font-size: min(26vw, 55vh);
+            font-size: min(35vw, 75vh);
             transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: flex;
             justify-content: center;
@@ -134,9 +154,9 @@
         class="relative w-full h-[80vh] flex flex-col items-center justify-center transition-all duration-500 z-10">
 
         <!-- 時間顯示 -->
-        <!-- 修改：使用 rounded-nums 字體，尺寸加大到 32vw -->
+        <!-- 修改：加入 metallic-text -->
         <div id="time-display"
-            class="rounded-nums text-[32vw] neon-text leading-none tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
+            class="rounded-nums text-[32vw] neon-text metallic-text leading-none tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
             05:00
         </div>
 
@@ -196,8 +216,17 @@
                 </svg>
             </button>
 
-            <!-- 佔位符 -->
-            <div class="w-[140px]"></div>
+            <!-- 音效選擇 -->
+            <div id="sound-selector" class="flex flex-col items-start gap-2 ml-4">
+                <span class="text-xs text-cyan-400 font-bold tracking-widest uppercase opacity-60">Alarm Sound</span>
+                <div class="flex gap-2">
+                    <button id="btn-sound-default"
+                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold ring-1 ring-cyan-500/50 bg-cyan-500/10">預設和弦</button>
+                    <button id="btn-sound-custom"
+                        class="btn-glass px-4 py-2 rounded-xl text-xs font-bold opacity-50">自訂音訊</button>
+                    <input type="file" id="audio-upload" accept="audio/*" class="hidden">
+                </div>
+            </div>
         </div>
 
         <!-- 時間到專用按鈕 -->
@@ -260,7 +289,9 @@
             intervalId: null,
             status: 'IDLE',
             isControlsVisible: true,
-            audioContext: null
+            audioContext: null,
+            audioMode: 'default', // 'default' or 'custom'
+            customBuffer: null
         };
 
         const dom = {
@@ -281,7 +312,10 @@
             modal: document.getElementById('input-modal'),
             inputMin: document.getElementById('input-min'),
             inputSec: document.getElementById('input-sec'),
-            neonBorder: document.getElementById('neon-border')
+            neonBorder: document.getElementById('neon-border'),
+            btnSoundDefault: document.getElementById('btn-sound-default'),
+            btnSoundCustom: document.getElementById('btn-sound-custom'),
+            audioUpload: document.getElementById('audio-upload')
         };
 
         const audioEngine = {
@@ -336,6 +370,17 @@
 
             playAlarm() {
                 this.init();
+
+                // 如果是自訂音效且有 Buffer
+                if (state.audioMode === 'custom' && state.customBuffer) {
+                    const source = this.ctx.createBufferSource();
+                    source.buffer = state.customBuffer;
+                    source.connect(this.reverbNode || this.ctx.destination);
+                    source.start(0);
+                    return;
+                }
+
+                // 否則播放預設和弦
                 const t = this.ctx.currentTime;
                 const freqs = [261.63, 329.63, 392.00, 523.25]; // C-E-G-C (C Major Chord)
 
@@ -422,11 +467,24 @@
             } else if (state.status === 'PAUSED') {
                 dom.iconPlay.classList.remove('hidden-force');
                 dom.iconPause.classList.add('hidden-force');
-                dom.setupControls.classList.add('hidden-force');
+                dom.setupControls.classList.remove('hidden-force'); // 暫停時顯示加減鈕
             } else if (state.status === 'IDLE') {
                 dom.iconPlay.classList.remove('hidden-force');
                 dom.iconPause.classList.add('hidden-force');
                 dom.setupControls.classList.remove('hidden-force');
+            }
+
+            // 更新音效選取按鈕
+            if (state.audioMode === 'default') {
+                dom.btnSoundDefault.classList.add('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                dom.btnSoundDefault.classList.remove('opacity-50');
+                dom.btnSoundCustom.classList.remove('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                dom.btnSoundCustom.classList.add('opacity-50');
+            } else {
+                dom.btnSoundCustom.classList.add('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                dom.btnSoundCustom.classList.remove('opacity-50');
+                dom.btnSoundDefault.classList.remove('ring-1', 'ring-cyan-500/50', 'bg-cyan-500/10');
+                dom.btnSoundDefault.classList.add('opacity-50');
             }
 
             if (state.status === 'FINISHED') {
@@ -595,6 +653,37 @@
                 resetTimer();
             });
 
+            // 音效切換
+            dom.btnSoundDefault.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.audioMode = 'default';
+                updateControlsUI();
+                localStorage.setItem('tablet_timer_audio_mode', 'default');
+            });
+
+            dom.btnSoundCustom.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dom.audioUpload.click();
+            });
+
+            dom.audioUpload.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        await audioEngine.init();
+                        audioEngine.ctx.decodeAudioData(ev.target.result, (buffer) => {
+                            state.customBuffer = buffer;
+                            state.audioMode = 'custom';
+                            updateControlsUI();
+                            localStorage.setItem('tablet_timer_audio_mode', 'custom');
+                            audioEngine.playBeep(); // 成功載入提示
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            });
+
             // Modal Logic
             dom.display.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -646,6 +735,12 @@
             if (savedTime) {
                 state.totalSeconds = parseInt(savedTime);
                 state.remainingSeconds = state.totalSeconds;
+            }
+
+            const savedAudioMode = localStorage.getItem('tablet_timer_audio_mode');
+            if (savedAudioMode) {
+                state.audioMode = savedAudioMode;
+                updateControlsUI();
             }
         }
 

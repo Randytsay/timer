@@ -203,7 +203,9 @@
         @media (orientation: portrait) {
             #time-display {
                 flex-direction: column;
-                font-size: min(45vw, 40vh);
+                gap: 5vh;
+                /* 增加垂直間距 */
+                font-size: min(45vw, 35vh);
                 /* 在直式下字體可以更大 */
                 line-height: 0.9;
             }
@@ -217,6 +219,49 @@
         /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
         .display-running {
             transform: scale(1.05);
+        }
+
+        /* 手機版面適配 */
+        @media (max-width: 768px) {
+            #controls-panel {
+                height: 40vh;
+                /* Fixed syntax error */
+                padding-bottom: 2rem;
+            }
+
+            .btn-glass {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.8rem;
+            }
+
+            .text-xl {
+                font-size: 1rem;
+            }
+
+            .w-28 {
+                width: 5rem;
+                height: 5rem;
+            }
+
+            .h-28 {
+                width: 5rem;
+                height: 5rem;
+            }
+
+            /* 調整音效/字型選擇區塊 */
+            #sound-selector button,
+            #font-selector button {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.65rem;
+            }
+
+            .ml-6 {
+                margin-left: 1rem;
+            }
+
+            .gap-10 {
+                gap: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -234,6 +279,8 @@
         <!-- 修改：加入 metallic-text -->
         <div id="time-display"
             class="rounded-nums neon-text metallic-text tracking-tight cursor-pointer active:scale-95 transition-transform duration-200 select-none">
+            <span id="time-hour" class="hidden-force">12</span>
+            <span id="time-sep-hour" class="hidden-force">:</span>
             <span id="time-min">05</span>
             <span id="time-sep">:</span>
             <span id="time-sec">00</span>
@@ -326,6 +373,19 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 模式切換 (右下角) -->
+            <div class="absolute right-6 bottom-10 flex flex-col gap-2">
+                <button id="btn-mode-toggle"
+                    class="btn-glass px-4 py-2 rounded-xl text-xs font-bold text-cyan-300 border-cyan-800/50 flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    切換時鐘
+                </button>
+            </div>
+
             <input type="file" id="audio-upload" accept="audio/*" class="hidden">
         </div>
 
@@ -392,6 +452,9 @@
             audioContext: null,
             audioMode: 'default', // 'default', 'thinking', 'entertainment', 'custom'
             fontMode: 'orbitron', // 'orbitron', 'bebas', 'michroma', 'jetbrains'
+            displayMode: 'timer', // 'timer' | 'clock'
+            clockIntervalId: null,
+            wakeLock: null, // Wake Lock Sentinel
             customBuffer: null,
             presets: {
                 thinking: { url: '思考音效.MP3', buffer: null },
@@ -402,6 +465,8 @@
         const dom = {
             container: document.getElementById('main-container'),
             display: document.getElementById('time-display'),
+            timeHour: document.getElementById('time-hour'), // New
+            timeSepHour: document.getElementById('time-sep-hour'), // New
             timeMin: document.getElementById('time-min'),
             timeSec: document.getElementById('time-sec'),
             statusText: document.getElementById('status-text'),
@@ -414,6 +479,7 @@
             finishedControls: document.getElementById('finished-controls'),
             btnRestart: document.getElementById('btn-restart'),
             btnBack: document.getElementById('btn-back-settings'),
+            btnModeToggle: document.getElementById('btn-mode-toggle'), // New
             // Inputs
             modal: document.getElementById('input-modal'),
             inputMin: document.getElementById('input-min'),
@@ -636,6 +702,35 @@
             }
         }
 
+        // Wake Lock API Implementation
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    state.wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock active');
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (state.wakeLock !== null) {
+                state.wakeLock.release()
+                    .then(() => {
+                        state.wakeLock = null;
+                        console.log('Wake Lock released');
+                    });
+            }
+        }
+
+        // Handle visibility change to re-acquire lock
+        document.addEventListener('visibilitychange', async () => {
+            if (state.wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
         function startTimer() {
             if (state.remainingSeconds <= 0) return;
             state.status = 'RUNNING';
@@ -643,6 +738,8 @@
             updateControlsUI();
             updateDisplay();
             hideControls(); // 開始後自動隱藏控制列
+            requestWakeLock(); // Request Wake Lock
+
             state.intervalId = setInterval(() => {
                 state.remainingSeconds--;
                 updateDisplay();
@@ -658,6 +755,7 @@
             updateControlsUI();
             updateDisplay();
             showControls(); // 暫停時自動顯示控制列
+            releaseWakeLock(); // Release Wake Lock on pause
         }
 
         function resetTimer() {
@@ -667,6 +765,7 @@
             updateControlsUI();
             updateDisplay();
             showControls();
+            releaseWakeLock(); // Release Wake Lock logic handled here implicitly as it's not runnign
         }
 
         function finishTimer() {
@@ -677,6 +776,74 @@
             updateControlsUI();
             showControls();
             audioEngine.playAlarm();
+            releaseWakeLock(); // Release Wake Lock when done
+        }
+
+        // Clock Mode Logic
+        function updateClock() {
+            const now = new Date();
+            const h = now.getHours().toString().padStart(2, '0');
+            const m = now.getMinutes().toString().padStart(2, '0');
+            const s = now.getSeconds().toString().padStart(2, '0');
+
+            dom.timeHour.textContent = h;
+            dom.timeMin.textContent = m;
+            dom.timeSec.textContent = s;
+        }
+
+        function startClock() {
+            updateClock();
+            state.clockIntervalId = setInterval(updateClock, 1000);
+            dom.timeHour.classList.remove('hidden-force');
+            dom.timeSepHour.classList.remove('hidden-force');
+            // Hide Timer Controls
+            dom.setupControls.classList.add('hidden-force');
+            dom.mainActionBtn.parentElement.classList.add('hidden-force'); // Hide Main Button Wrapper
+            dom.resetBtn.classList.add('hidden-force');
+            dom.finishedControls.classList.add('hidden-force');
+
+            dom.btnModeToggle.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                切換倒數
+            `;
+
+            requestWakeLock(); // Keep screen on in clock mode
+        }
+
+        function stopClock() {
+            clearInterval(state.clockIntervalId);
+            dom.timeHour.classList.add('hidden-force');
+            dom.timeSepHour.classList.add('hidden-force');
+            // Restore Timer Controls (Visibility handled by updateControlsUI)
+            dom.mainActionBtn.parentElement.classList.remove('hidden-force');
+            dom.resetBtn.classList.remove('hidden-force');
+
+            dom.btnModeToggle.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                切換時鐘
+            `;
+            releaseWakeLock();
+        }
+
+        function toggleMode() {
+            audioEngine.playBeep();
+            if (state.displayMode === 'timer') {
+                // Switch to Clock
+                if (state.status === 'RUNNING') pauseTimer(); // Pause timer if running
+                state.displayMode = 'clock';
+                startClock();
+            } else {
+                // Switch to Timer
+                state.displayMode = 'timer';
+                stopClock();
+                updateDisplay(); // Restore timer display
+                updateControlsUI(); // Restore controls
+            }
         }
 
         function toggleControls() {
@@ -852,9 +1019,18 @@
                 });
             });
 
-            // Modal Logic
+            dom.btnModeToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleMode();
+            });
+
             dom.display.addEventListener('click', (e) => {
-                // 如果是運行中或暫停中，點擊時間數字應該是切換控制面板，而不是打開設定
+                // Clock Mode: Toggle controls
+                if (state.displayMode === 'clock') {
+                    return; // Let bubbling handle toggleControls
+                }
+
+                // Timer Mode: 如果是運行中或暫停中，點擊時間數字應該是切換控制面板，而不是打開設定
                 if (state.status !== 'IDLE') {
                     // 不 call stopPropagation，讓事件冒泡到 body 觸發 toggleControls
                     return;

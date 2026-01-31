@@ -29,271 +29,266 @@
             font-family: 'Bebas Neue', sans-serif;
             font-weight: 400;
             letter-spacing: 0.05em;
+            font-size: 1.5em;
+            /* 再加大 */
+        }
 
-            .font-bebas {
-                font-family: 'Bebas Neue', sans-serif;
-                font-weight: 400;
-                letter-spacing: 0.05em;
-                font-size: 1.5em;
-                /* 再加大 */
+        .font-michroma {
+            font-family: 'Michroma', sans-serif;
+            font-weight: 400;
+            letter-spacing: -0.05em;
+            font-size: 0.85em;
+            /* 縮小防止超出 */
+        }
+
+        .font-jetbrains {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+        }
+
+        .rounded-nums {
+            /* 預設繼承或由 JS 切換 */
+            transition: font-family 0.3s ease;
+        }
+
+        /* 霓虹文字效果 - 柔和版 */
+        .neon-text {
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.4),
+                0 0 20px rgba(0, 255, 255, 0.2);
+            color: #ffffff;
+        }
+
+        /* 銀色金屬質感 (Metallic Silver / Chrome) */
+        .metallic-text {
+            background: linear-gradient(180deg,
+                    #f8f9fa 0%,
+                    #ffffff 20%,
+                    #d1d5db 45%,
+                    #9ca3af 50%,
+                    #d1d5db 55%,
+                    #f3f4f6 80%,
+                    #cbd5e1 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            /* 強制邊界光與立體感 */
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+        }
+
+        .neon-text-finished {
+            text-shadow: 0 0 15px rgba(255, 80, 80, 0.9),
+                0 0 30px rgba(255, 80, 80, 0.6);
+            color: #ffcccc;
+            background: none;
+            -webkit-background-clip: unset;
+            background-clip: unset;
+            -webkit-text-fill-color: initial;
+            filter: none;
+        }
+
+        /* 按鈕樣式 */
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .btn-glass:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.92);
+        }
+
+        /* 控制列過渡動畫 */
+        .controls-panel {
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
+        }
+
+        .controls-hidden {
+            transform: translateY(120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hidden-force {
+            display: none !important;
+        }
+
+        /* 移除預設的 input number 上下箭頭 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* 全螢幕霓虹外框 */
+        #neon-border {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 100;
+            border: 12px solid transparent;
+            transition: all 1s ease;
+            opacity: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes border-breathe {
+
+            0%,
+            100% {
+                border-width: 6px;
+                filter: brightness(1);
             }
 
-            .font-michroma {
-                font-family: 'Michroma', sans-serif;
-                font-weight: 400;
-                letter-spacing: -0.05em;
-                font-size: 0.85em;
-                /* 縮小防止超出 */
+            50% {
+                border-width: 14px;
+                filter: brightness(1.5);
+            }
+        }
+
+        /* 幻彩循環動畫 */
+        @keyframes border-color-cycle {
+            0% {
+                border-color: #00ffff;
+                box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
             }
 
-            .font-jetbrains {
-                font-family: 'JetBrains Mono', monospace;
-                font-weight: 800;
-                letter-spacing: -0.05em;
+            25% {
+                border-color: #ff00ff;
+                box-shadow: inset 0 0 30px #ff00ff, 0 0 30px #ff00ff;
             }
 
-            .rounded-nums {
-                /* 預設繼承或由 JS 切換 */
-                transition: font-family 0.3s ease;
+            50% {
+                border-color: #ffff00;
+                box-shadow: inset 0 0 30px #ffff00, 0 0 30px #ffff00;
             }
 
-            /* 霓虹文字效果 - 柔和版 */
-            .neon-text {
-                text-shadow: 0 0 10px rgba(0, 255, 255, 0.4),
-                    0 0 20px rgba(0, 255, 255, 0.2);
-                color: #ffffff;
+            75% {
+                border-color: #00ff00;
+                box-shadow: inset 0 0 30px #00ff00, 0 0 30px #00ff00;
             }
 
-            /* 銀色金屬質感 (Metallic Silver / Chrome) */
-            .metallic-text {
-                background: linear-gradient(180deg,
-                        #f8f9fa 0%,
-                        #ffffff 20%,
-                        #d1d5db 45%,
-                        #9ca3af 50%,
-                        #d1d5db 55%,
-                        #f3f4f6 80%,
-                        #cbd5e1 100%);
-                -webkit-background-clip: text;
-                background-clip: text;
-                -webkit-text-fill-color: transparent;
-                /* 強制邊界光與立體感 */
-                filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+            100% {
+                border-color: #00ffff;
+                box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
             }
+        }
 
-            .neon-text-finished {
-                text-shadow: 0 0 15px rgba(255, 80, 80, 0.9),
-                    0 0 30px rgba(255, 80, 80, 0.6);
-                color: #ffcccc;
-                background: none;
-                -webkit-background-clip: unset;
-                background-clip: unset;
-                -webkit-text-fill-color: initial;
-                filter: none;
-            }
+        .border-running {
+            opacity: 1 !important;
+            animation: border-breathe 3s ease-in-out infinite, border-color-cycle 8s linear infinite;
+        }
 
-            /* 按鈕樣式 */
-            .btn-glass {
-                background: rgba(255, 255, 255, 0.08);
-                backdrop-filter: blur(12px);
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            }
+        /* 讓計時數字最大化且置中 */
+        #time-display {
+            font-size: min(25vw, 65vh);
+            /* 縮小以防止溢出 */
+            font-variant-numeric: tabular-nums;
+            /* 強制等寬數字，防止寬度跳動 */
+            font-feature-settings: "tnum";
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            white-space: nowrap;
+        }
 
-            .btn-glass:active {
-                background: rgba(255, 255, 255, 0.2);
-                transform: scale(0.92);
-            }
-
-            /* 控制列過渡動畫 */
-            .controls-panel {
-                transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
-            }
-
-            .controls-hidden {
-                transform: translateY(120%);
-                opacity: 0;
-                pointer-events: none;
-            }
-
-            .hidden-force {
-                display: none !important;
-            }
-
-            /* 移除預設的 input number 上下箭頭 */
-            input[type=number]::-webkit-inner-spin-button,
-            input[type=number]::-webkit-outer-spin-button {
-                -webkit-appearance: none;
-                margin: 0;
-            }
-
-            /* 全螢幕霓虹外框 */
-            #neon-border {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                pointer-events: none;
-                z-index: 100;
-                border: 12px solid transparent;
-                transition: all 1s ease;
-                opacity: 0;
-                box-sizing: border-box;
-            }
-
-            @keyframes border-breathe {
-
-                0%,
-                100% {
-                    border-width: 6px;
-                    filter: brightness(1);
-                }
-
-                50% {
-                    border-width: 14px;
-                    filter: brightness(1.5);
-                }
-            }
-
-            /* 幻彩循環動畫 */
-            @keyframes border-color-cycle {
-                0% {
-                    border-color: #00ffff;
-                    box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
-                }
-
-                25% {
-                    border-color: #ff00ff;
-                    box-shadow: inset 0 0 30px #ff00ff, 0 0 30px #ff00ff;
-                }
-
-                50% {
-                    border-color: #ffff00;
-                    box-shadow: inset 0 0 30px #ffff00, 0 0 30px #ffff00;
-                }
-
-                75% {
-                    border-color: #00ff00;
-                    box-shadow: inset 0 0 30px #00ff00, 0 0 30px #00ff00;
-                }
-
-                100% {
-                    border-color: #00ffff;
-                    box-shadow: inset 0 0 30px #00ffff, 0 0 30px #00ffff;
-                }
-            }
-
-            .border-running {
-                opacity: 1 !important;
-                animation: border-breathe 3s ease-in-out infinite, border-color-cycle 8s linear infinite;
-            }
-
-            /* 讓計時數字最大化且置中 */
+        /* 直向模式優化：分在上、秒在下 */
+        @media (orientation: portrait) {
             #time-display {
-                font-size: min(25vw, 65vh);
-                /* 縮小以防止溢出 */
-                font-variant-numeric: tabular-nums;
-                /* 強制等寬數字，防止寬度跳動 */
-                font-feature-settings: "tnum";
-                transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                width: 100%;
-                white-space: nowrap;
+                flex-direction: column;
+                gap: 5vh;
+                /* 增加垂直間距 */
+                font-size: min(45vw, 35vh);
+                /* 在直式下字體可以更大 */
+                line-height: 0.9;
             }
 
-            /* 直向模式優化：分在上、秒在下 */
-            @media (orientation: portrait) {
-                #time-display {
-                    flex-direction: column;
-                    gap: 5vh;
-                    /* 增加垂直間距 */
-                    font-size: min(45vw, 35vh);
-                    /* 在直式下字體可以更大 */
-                    line-height: 0.9;
-                }
-
-                #time-sep {
-                    display: none;
-                    /* 隱藏冒號，靠上下位置區分 */
-                }
+            #time-sep {
+                display: none;
+                /* 隱藏冒號，靠上下位置區分 */
             }
+        }
 
-            /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
-            .display-running {
-                transform: scale(1.05);
-            }
+        /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
+        .display-running {
+            transform: scale(1.05);
+        }
 
-            /* 時鐘模式：稍微縮小字體以容納 HH:MM:SS */
+        /* 時鐘模式：稍微縮小字體以容納 HH:MM:SS */
+        .clock-mode-text {
+            font-size: min(18vw, 50vh) !important;
+        }
+
+        /* 直式時鐘模式優化 */
+        /* 直式時鐘模式優化 */
+        @media (orientation: portrait) {
             .clock-mode-text {
-                font-size: min(18vw, 50vh) !important;
+                font-size: min(35vw, 30vh) !important;
+                gap: 2vh !important;
+                /* 時鐘模式直式間距稍縮 */
             }
+        }
 
-            /* 直式時鐘模式優化 */
-            /* 直式時鐘模式優化 */
-            @media (orientation: portrait) {
-                .clock-mode-text {
-                    font-size: min(35vw, 30vh) !important;
-                    gap: 2vh !important;
-                    /* 時鐘模式直式間距稍縮 */
-                }
-            }
+        /* Michroma 在時鐘模式的特別修正 - 防止超出 */
+        .clock-mode-text.font-michroma {
+            font-size: min(14vw, 40vh) !important;
+        }
 
-            /* Michroma 在時鐘模式的特別修正 - 防止超出 */
+        @media (orientation: portrait) {
             .clock-mode-text.font-michroma {
-                font-size: min(14vw, 40vh) !important;
+                font-size: min(28vw, 25vh) !important;
+            }
+        }
+
+        /* 手機版面適配 */
+        @media (max-width: 768px) {
+            #controls-panel {
+                height: 40vh;
+                /* Fixed syntax error */
+                padding-bottom: 2rem;
             }
 
-            @media (orientation: portrait) {
-                .clock-mode-text.font-michroma {
-                    font-size: min(28vw, 25vh) !important;
-                }
+            .btn-glass {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.8rem;
             }
 
-            /* 手機版面適配 */
-            @media (max-width: 768px) {
-                #controls-panel {
-                    height: 40vh;
-                    /* Fixed syntax error */
-                    padding-bottom: 2rem;
-                }
-
-                .btn-glass {
-                    padding: 0.5rem 0.75rem;
-                    font-size: 0.8rem;
-                }
-
-                .text-xl {
-                    font-size: 1rem;
-                }
-
-                .w-28 {
-                    width: 5rem;
-                    height: 5rem;
-                }
-
-                .h-28 {
-                    width: 5rem;
-                    height: 5rem;
-                }
-
-                /* 調整音效/字型選擇區塊 */
-                #sound-selector button,
-                #font-selector button {
-                    padding: 0.25rem 0.5rem;
-                    font-size: 0.65rem;
-                }
-
-                .ml-6 {
-                    margin-left: 1rem;
-                }
-
-                .gap-10 {
-                    gap: 1.5rem;
-                }
+            .text-xl {
+                font-size: 1rem;
             }
+
+            .w-28 {
+                width: 5rem;
+                height: 5rem;
+            }
+
+            .h-28 {
+                width: 5rem;
+                height: 5rem;
+            }
+
+            /* 調整音效/字型選擇區塊 */
+            #sound-selector button,
+            #font-selector button {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.65rem;
+            }
+
+            .ml-6 {
+                margin-left: 1rem;
+            }
+
+            .gap-10 {
+                gap: 1.5rem;
+            }
+        }
     </style>
 </head>
 
@@ -443,9 +438,9 @@
 
     <!-- 時間輸入 Modal (支援分:秒) -->
     <div id="input-modal"
-        class="fixed inset-0 bg-black/90 z-50 hidden-force flex items-center justify-center backdrop-blur-md">
+        class="fixed inset-0 bg-black/90 z-[200] hidden-force flex items-center justify-center backdrop-blur-md">
         <div
-            class="bg-gray-900 border border-gray-700 p-8 rounded-[2rem] w-[500px] text-center shadow-2xl transform scale-100 transition-transform">
+            class="bg-gray-900 border border-gray-700 p-8 rounded-[2rem] w-[500px] text-center shadow-2xl transform scale-100 transition-transform pointer-events-auto">
             <h3 class="text-2xl text-cyan-400 mb-8 font-bold tracking-wide">設定時間</h3>
 
             <div class="flex items-center justify-center gap-4 mb-8">
@@ -576,7 +571,7 @@
             currentSource: null, // Track playing source for preview/stop
 
             async playAlarm() {
-                this.init();
+                await this.init();
 
                 // Stop previous sound if playing
                 if (this.currentSource) {
@@ -1125,6 +1120,13 @@
                     updateDisplay();
                 }
                 dom.modal.classList.add('hidden-force');
+            });
+
+            // 點擊背景關閉 Modal
+            dom.modal.addEventListener('click', (e) => {
+                if (e.target === dom.modal) {
+                    dom.modal.classList.add('hidden-force');
+                }
             });
 
             // 自動跳轉 Input

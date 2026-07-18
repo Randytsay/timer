@@ -454,14 +454,14 @@
 
             <div class="flex items-center justify-center gap-4 mb-8">
                 <div class="flex flex-col">
-                    <input type="number" id="input-min"
+                    <input type="number" id="input-min" min="0" max="99" inputmode="numeric"
                         class="rounded-nums w-40 bg-gray-800 text-white text-7xl text-center p-4 rounded-2xl border-2 border-gray-600 focus:border-cyan-500 focus:outline-none focus:bg-gray-800 transition-colors placeholder-gray-600"
                         placeholder="00">
                     <span class="text-gray-500 text-sm mt-2 font-bold">分</span>
                 </div>
                 <span class="text-6xl text-gray-600 -mt-8">:</span>
                 <div class="flex flex-col">
-                    <input type="number" id="input-sec"
+                    <input type="number" id="input-sec" min="0" max="59" inputmode="numeric"
                         class="rounded-nums w-40 bg-gray-800 text-white text-7xl text-center p-4 rounded-2xl border-2 border-gray-600 focus:border-cyan-500 focus:outline-none focus:bg-gray-800 transition-colors placeholder-gray-600"
                         placeholder="00">
                     <span class="text-gray-500 text-sm mt-2 font-bold">秒</span>
@@ -478,9 +478,16 @@
     </div>
 
     <script>
+        const DEFAULT_TIME_SECONDS = 300;
+        const MIN_TIME_SECONDS = 1;
+        const MAX_TIME_SECONDS = 5999;
+        const VALID_AUDIO_MODES = new Set(['default', 'thinking', 'entertainment', 'custom']);
+        const VALID_FONT_MODES = new Set(['orbitron', 'bebas', 'michroma', 'jetbrains']);
+
         const state = {
-            totalSeconds: 300,
-            remainingSeconds: 300,
+            totalSeconds: DEFAULT_TIME_SECONDS,
+            remainingSeconds: DEFAULT_TIME_SECONDS,
+            endTimestamp: null,
             intervalId: null,
             status: 'IDLE',
             isControlsVisible: true,
@@ -496,6 +503,85 @@
                 entertainment: { url: '時間綜藝.MP3', buffer: null }
             }
         };
+
+        function clampTimerSeconds(value, fallback = DEFAULT_TIME_SECONDS) {
+            const seconds = Number(value);
+            if (!Number.isFinite(seconds)) return fallback;
+            return Math.min(MAX_TIME_SECONDS, Math.max(MIN_TIME_SECONDS, Math.round(seconds)));
+        }
+
+        function clearTimerInterval() {
+            if (state.intervalId !== null) {
+                clearInterval(state.intervalId);
+                state.intervalId = null;
+            }
+        }
+
+        function clearClockInterval() {
+            if (state.clockIntervalId !== null) {
+                clearInterval(state.clockIntervalId);
+                state.clockIntervalId = null;
+            }
+        }
+
+        function saveSettings() {
+            localStorage.setItem('tablet_timer_seconds', String(state.totalSeconds));
+            localStorage.setItem('tablet_timer_audio_mode', state.audioMode);
+            localStorage.setItem('tablet_timer_font_mode', state.fontMode);
+        }
+
+        function loadSettings() {
+            const savedTime = localStorage.getItem('tablet_timer_seconds');
+            if (savedTime !== null) {
+                state.totalSeconds = clampTimerSeconds(savedTime);
+                state.remainingSeconds = state.totalSeconds;
+            }
+
+            const savedAudioMode = localStorage.getItem('tablet_timer_audio_mode');
+            if (VALID_AUDIO_MODES.has(savedAudioMode)) {
+                state.audioMode = savedAudioMode;
+            }
+
+            const savedFontMode = localStorage.getItem('tablet_timer_font_mode');
+            if (VALID_FONT_MODES.has(savedFontMode)) {
+                state.fontMode = savedFontMode;
+            }
+        }
+
+        function setIdleTimerDuration(seconds) {
+            const nextSeconds = clampTimerSeconds(seconds);
+            state.totalSeconds = nextSeconds;
+            state.remainingSeconds = nextSeconds;
+            saveSettings();
+            updateDisplay();
+        }
+
+        function adjustTimerDuration(deltaSeconds) {
+            if (state.status === 'RUNNING' || state.status === 'FINISHED') return;
+
+            const nextTotalSeconds = clampTimerSeconds(state.totalSeconds + deltaSeconds);
+            const appliedDelta = nextTotalSeconds - state.totalSeconds;
+            state.totalSeconds = nextTotalSeconds;
+
+            if (state.status === 'PAUSED') {
+                state.remainingSeconds = Math.min(
+                    state.totalSeconds,
+                    Math.max(MIN_TIME_SECONDS, state.remainingSeconds + appliedDelta)
+                );
+            } else {
+                state.remainingSeconds = state.totalSeconds;
+            }
+
+            saveSettings();
+            updateDisplay();
+        }
+
+        function syncRemainingFromDeadline() {
+            if (state.endTimestamp === null) return state.remainingSeconds;
+            const remaining = Math.ceil((state.endTimestamp - Date.now()) / 1000);
+            state.remainingSeconds = Math.max(0, remaining);
+            return state.remainingSeconds;
+        }
 
         const dom = {
             container: document.getElementById('main-container'),
@@ -786,8 +872,10 @@
         });
 
         function startTimer() {
-            if (state.remainingSeconds <= 0) return;
+            if (state.status === 'RUNNING' || state.remainingSeconds <= 0) return;
             state.status = 'RUNNING';
+            state.endTimestamp = Date.now() + state.remainingSeconds * 1000;
+            clearTimerInterval();
             audioEngine.init();
             updateControlsUI();
             updateDisplay();
@@ -795,7 +883,7 @@
             requestWakeLock(); // Request Wake Lock
 
             state.intervalId = setInterval(() => {
-                state.remainingSeconds--;
+                syncRemainingFromDeadline();
                 updateDisplay();
                 if (state.remainingSeconds <= 0) {
                     finishTimer();
@@ -804,7 +892,9 @@
         }
 
         function pauseTimer() {
-            clearInterval(state.intervalId);
+            syncRemainingFromDeadline();
+            clearTimerInterval();
+            state.endTimestamp = null;
             state.status = 'PAUSED';
             updateControlsUI();
             updateDisplay();
@@ -813,9 +903,11 @@
         }
 
         function resetTimer() {
-            clearInterval(state.intervalId);
+            clearTimerInterval();
+            state.endTimestamp = null;
             state.remainingSeconds = state.totalSeconds;
             state.status = 'IDLE';
+            saveSettings();
             updateControlsUI();
             updateDisplay();
             showControls();
@@ -823,7 +915,8 @@
         }
 
         function finishTimer() {
-            clearInterval(state.intervalId);
+            clearTimerInterval();
+            state.endTimestamp = null;
             state.status = 'FINISHED';
             state.remainingSeconds = 0;
             updateDisplay();
@@ -847,6 +940,7 @@
 
         function startClock() {
             updateClock();
+            clearClockInterval();
             state.clockIntervalId = setInterval(updateClock, 1000);
             dom.timeHour.classList.remove('hidden-force');
             dom.timeSepHour.classList.remove('hidden-force');
@@ -870,7 +964,7 @@
         }
 
         function stopClock() {
-            clearInterval(state.clockIntervalId);
+            clearClockInterval();
             dom.timeHour.classList.add('hidden-force');
             dom.timeSepHour.classList.add('hidden-force');
             dom.display.classList.remove('clock-mode-text'); // Remove Smaller Font Class
@@ -971,21 +1065,13 @@
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     audioEngine.playBeep();
-                    const secondsToAdd = parseInt(btn.dataset.add);
-                    state.totalSeconds += secondsToAdd;
-                    state.remainingSeconds = state.totalSeconds;
-                    updateDisplay();
+                    adjustTimerDuration(Number.parseInt(btn.dataset.add, 10));
                 });
             });
 
             // +/- 按鈕
             const adjustTime = (deltaSec) => {
-                let newTime = state.totalSeconds + deltaSec;
-                if (newTime < 0) newTime = 0;
-                if (newTime > 5999) newTime = 5999;
-                state.totalSeconds = newTime;
-                state.remainingSeconds = state.totalSeconds;
-                updateDisplay();
+                adjustTimerDuration(deltaSec);
             };
 
             ['btn-plus', 'btn-minus'].forEach(id => {
@@ -1129,12 +1215,7 @@
                 if (s < 0) s = 0;
                 if (s > 59) s = 59; // 通常輸入秒數不超過 59
 
-                const newTotal = m * 60 + s;
-                if (newTotal > 0) {
-                    state.totalSeconds = newTotal;
-                    state.remainingSeconds = state.totalSeconds;
-                    updateDisplay();
-                }
+                setIdleTimerDuration(m * 60 + s);
                 dom.modal.classList.add('hidden-force');
             });
 
@@ -1153,30 +1234,11 @@
                 }
             });
 
-            const savedTime = localStorage.getItem('tablet_timer_seconds');
-            if (savedTime) {
-                state.totalSeconds = parseInt(savedTime);
-                state.remainingSeconds = state.totalSeconds;
-            }
-
-            const savedAudioMode = localStorage.getItem('tablet_timer_audio_mode');
-            if (savedAudioMode) {
-                state.audioMode = savedAudioMode;
-            }
-
-            const savedFontMode = localStorage.getItem('tablet_timer_font_mode');
-            if (savedFontMode) {
-                state.fontMode = savedFontMode;
-            }
-
             updateControlsUI();
         }
 
-        window.addEventListener('beforeunload', () => {
-            localStorage.setItem('tablet_timer_seconds', state.totalSeconds);
-        });
-
         function init() {
+            loadSettings();
             updateDisplay();
             updateControlsUI();
             bindEvents();

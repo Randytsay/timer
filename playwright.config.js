@@ -2,7 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
     testDir: './test/e2e',
-    fullyParallel: true,
+    // Web Audio 與 WebKit 同時大量啟動時會造成不穩定，序列執行可穩定覆蓋完整矩陣。
+    fullyParallel: false,
+    workers: 1,
     reporter: 'list',
     use: {
         baseURL: 'http://127.0.0.1:4173',

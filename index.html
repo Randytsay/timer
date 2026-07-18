@@ -603,6 +603,8 @@
         <!-- 時間到專用按鈕 -->
         <div id="finished-controls"
             class="hidden-force flex items-center gap-6 w-full justify-center absolute bottom-12 left-0">
+            <button id="btn-stop-alarm"
+                class="btn-glass px-6 py-4 rounded-2xl text-lg font-bold text-cyan-100 border-cyan-800/50">停止音效</button>
             <button id="btn-back-settings"
                 class="btn-glass px-8 py-4 rounded-2xl text-xl font-bold flex items-center gap-3 text-gray-300 border-gray-600">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -794,6 +796,7 @@
             finishedControls: document.getElementById('finished-controls'),
             btnRestart: document.getElementById('btn-restart'),
             btnBack: document.getElementById('btn-back-settings'),
+            btnStopAlarm: document.getElementById('btn-stop-alarm'),
             btnModeToggle: document.getElementById('btn-mode-toggle'), // New
             // Inputs
             modal: document.getElementById('input-modal'),
@@ -820,6 +823,7 @@
             muted: false,
             volume: 0.7,
             activeSources: new Set(),
+            alarmRepeatId: null,
 
             async init() {
                 try {
@@ -849,10 +853,18 @@
             },
 
             stopAll() {
+                this.stopAlarmRepeat();
                 this.activeSources.forEach(source => {
                     try { source.stop(); } catch (err) { /* Source may already be stopped. */ }
                 });
                 this.activeSources.clear();
+            },
+
+            stopAlarmRepeat() {
+                if (this.alarmRepeatId !== null) {
+                    clearInterval(this.alarmRepeatId);
+                    this.alarmRepeatId = null;
+                }
             },
 
             setVolume(value) {
@@ -946,11 +958,11 @@
                 osc.stop(t + 0.1);
             },
 
-            async playAlarm() {
+            async playAlarm({ repeat = false } = {}) {
                 if (!(await this.init())) return;
                 this.stopAll();
 
-                // 自訂音效保留原檔播放；內建音效使用三組可停止的合成提示音。
+                // 自訂音效保留原檔的乾淨聲音；內建提示音維持霓虹風格殘響。
                 let bufferToPlay = null;
 
                 if (state.audioMode === 'custom' && state.customBuffer) {
@@ -960,13 +972,16 @@
                 if (bufferToPlay) {
                     const source = this.ctx.createBufferSource();
                     source.buffer = bufferToPlay;
-                    source.connect(this.reverbNode || this.masterGain || this.ctx.destination);
+                    source.connect(this.masterGain || this.ctx.destination);
                     this.trackSource(source);
                     source.start(0);
                     return;
                 }
 
                 this.playBuiltInAlarm(state.audioMode);
+                if (repeat) {
+                    this.alarmRepeatId = setInterval(() => this.playBuiltInAlarm(state.audioMode), 3000);
+                }
             }
         };
 
@@ -1195,7 +1210,7 @@
             updateControlsUI();
             showControls();
             startOvertimeInterval();
-            audioEngine.playAlarm();
+            audioEngine.playAlarm({ repeat: true });
             syncWakeLock();
         }
 
@@ -1210,6 +1225,7 @@
 
         function startClock() {
             clearOvertimeInterval();
+            audioEngine.stopAll();
             updateClock();
             clearClockInterval();
             state.clockIntervalId = setInterval(updateClock, 1000);
@@ -1406,6 +1422,11 @@
                 syncTimerState(state.timerEngine.reset());
                 updateControlsUI();
                 startTimer();
+            });
+
+            dom.btnStopAlarm.addEventListener('click', (e) => {
+                e.stopPropagation();
+                audioEngine.stopAll();
             });
 
             dom.btnBack.addEventListener('click', (e) => {

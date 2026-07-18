@@ -55,6 +55,24 @@ test('does not start a hidden timer when Space is pressed in clock mode', async 
     await expect(page.locator('#btn-main-action')).toHaveClass(/hidden-force/);
 });
 
+test('centers the running display on phone viewports and keeps counting overtime', async ({ page }, testInfo) => {
+    test.skip(!['iphone-se', 'iphone-13', 'pixel-7'].includes(testInfo.project.name), 'This assertion targets phone-sized viewports.');
+    await page.locator('#time-display').click();
+    await page.locator('#input-min').fill('0');
+    await page.locator('#input-sec').fill('1');
+    await page.getByRole('button', { name: '確定' }).click();
+    await page.locator('#btn-main-action').click();
+
+    const layout = await page.locator('#time-display').evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { center: rect.top + rect.height / 2, viewportCenter: window.innerHeight / 2 };
+    });
+    expect(Math.abs(layout.center - layout.viewportCenter)).toBeLessThanOrEqual(8);
+
+    await expect(page.locator('#time-min')).toHaveText('-00', { timeout: 4_000 });
+    await expect(page.locator('#time-sec')).toHaveText('01', { timeout: 2_500 });
+});
+
 test('fits page, primary controls, and modal in the active viewport', async ({ page }) => {
     const layout = await page.evaluate(() => {
         const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
@@ -86,7 +104,8 @@ test('fits page, primary controls, and modal in the active viewport', async ({ p
     }
 });
 
-test('keeps the desktop display within the viewport while running', async ({ page }) => {
+test('keeps the desktop display within the viewport while running', async ({ page }, testInfo) => {
+    test.skip(!testInfo.project.name.startsWith('desktop-'), 'This assertion targets desktop browser projects.');
     await page.setViewportSize({ width: 2000, height: 1237 });
     await page.locator('#btn-main-action').click();
 

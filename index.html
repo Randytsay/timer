@@ -281,6 +281,18 @@
                 padding-bottom: 1rem;
             }
 
+            /* 計時中控制列收合後，數字要佔滿手機可視區並保持真正置中。 */
+            #main-container.timer-focused {
+                height: 100vh;
+                height: 100dvh;
+                transition: none;
+            }
+
+            #main-container.timer-focused #status-text {
+                position: absolute;
+                top: calc(50% + 24vh);
+            }
+
             .btn-glass {
                 padding: 0.5rem 0.75rem;
                 font-size: 0.8rem;
@@ -660,6 +672,7 @@
             remainingSeconds: DEFAULT_TIME_SECONDS,
             endTimestamp: null,
             intervalId: null,
+            overtimeIntervalId: null,
             status: 'IDLE',
             isControlsVisible: true,
             audioContext: null,
@@ -687,6 +700,19 @@
                 clearInterval(state.intervalId);
                 state.intervalId = null;
             }
+        }
+
+        function clearOvertimeInterval() {
+            if (state.overtimeIntervalId !== null) {
+                clearInterval(state.overtimeIntervalId);
+                state.overtimeIntervalId = null;
+            }
+        }
+
+        function startOvertimeInterval() {
+            clearOvertimeInterval();
+            if (state.displayMode !== 'timer' || state.status !== 'FINISHED') return;
+            state.overtimeIntervalId = setInterval(updateDisplay, 1000);
         }
 
         function clearClockInterval() {
@@ -946,8 +972,12 @@
 
 
         function updateDisplay() {
-            const { minutes: m, seconds: s } = formatTimerParts(state.remainingSeconds);
-            dom.timeMin.textContent = m;
+            const isOvertime = state.status === 'FINISHED';
+            const secondsToDisplay = isOvertime
+                ? state.timerEngine.getOvertimeSeconds()
+                : state.remainingSeconds;
+            const { minutes: m, seconds: s } = formatTimerParts(secondsToDisplay);
+            dom.timeMin.textContent = isOvertime ? `-${m}` : m;
             dom.timeSec.textContent = s;
 
             const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) * 100 : 0;
@@ -1117,6 +1147,7 @@
 
         function startTimer() {
             if (state.status === 'RUNNING' || state.remainingSeconds <= 0) return;
+            clearOvertimeInterval();
             syncTimerState(state.timerEngine.start());
             clearTimerInterval();
             audioEngine.init();
@@ -1146,6 +1177,7 @@
 
         function resetTimer() {
             clearTimerInterval();
+            clearOvertimeInterval();
             syncTimerState(state.timerEngine.reset());
             audioEngine.stopAll();
             saveSettings();
@@ -1162,6 +1194,7 @@
             updateDisplay();
             updateControlsUI();
             showControls();
+            startOvertimeInterval();
             audioEngine.playAlarm();
             syncWakeLock();
         }
@@ -1176,6 +1209,7 @@
         }
 
         function startClock() {
+            clearOvertimeInterval();
             updateClock();
             clearClockInterval();
             state.clockIntervalId = setInterval(updateClock, 1000);
@@ -1235,6 +1269,7 @@
                 stopClock();
                 updateDisplay(); // Restore timer display
                 updateControlsUI(); // Restore controls
+                startOvertimeInterval();
             }
         }
 
@@ -1249,6 +1284,7 @@
         function hideControls() {
             state.isControlsVisible = false;
             dom.controlsPanel.classList.add('controls-hidden');
+            dom.container.classList.toggle('timer-focused', state.displayMode === 'timer' && state.status === 'RUNNING');
             // 控制列收起時保持字體比例，避免與執行中縮放疊加而裁切數字。
             dom.container.style.transform = 'scale(1)';
         }
@@ -1256,6 +1292,7 @@
         function showControls() {
             state.isControlsVisible = true;
             dom.controlsPanel.classList.remove('controls-hidden');
+            dom.container.classList.remove('timer-focused');
             // 恢復原始比例，同樣保持置中
             dom.container.style.transform = 'scale(1)';
         }

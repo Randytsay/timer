@@ -29,6 +29,24 @@ test('switches between countdown and clock modes', async ({ page }) => {
     await expect(page.getByRole('button', { name: '切換時鐘' })).toBeVisible();
 });
 
+test('selects every built-in sound and display font', async ({ page }) => {
+    for (const sound of ['和弦', '思考', '綜藝']) {
+        await page.getByRole('button', { name: sound }).click();
+        await expect(page.getByRole('button', { name: sound })).toHaveClass(/ring-cyan-500\/50/);
+    }
+
+    const fontClasses = {
+        Orbitron: 'font-orbitron',
+        Bebas: 'font-bebas',
+        Michroma: 'font-michroma',
+        JetBrains: 'font-jetbrains'
+    };
+    for (const [font, className] of Object.entries(fontClasses)) {
+        await page.getByRole('button', { name: font }).click();
+        await expect(page.locator('#time-display')).toHaveClass(new RegExp(className));
+    }
+});
+
 test('keeps the desktop display within the viewport while running', async ({ page }) => {
     await page.setViewportSize({ width: 2000, height: 1237 });
     await page.locator('#btn-main-action').click();

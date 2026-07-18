@@ -9,8 +9,14 @@ export default defineConfig({
         trace: 'retain-on-failure'
     },
     projects: [
-        { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },
-        { name: 'webkit-desktop', use: { ...devices['Desktop Safari'] } }
+        {
+            name: 'chromium-desktop',
+            use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } }
+        },
+        {
+            name: 'webkit-desktop',
+            use: { ...devices['Desktop Safari'], viewport: { width: 1920, height: 1080 } }
+        }
     ],
     webServer: {
         command: 'python3 -m http.server 4173 --bind 127.0.0.1',

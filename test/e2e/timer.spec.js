@@ -62,6 +62,23 @@ test('keeps the desktop display within the viewport while running', async ({ pag
     expect(bounds.bottom).toBeLessThanOrEqual(1237);
 });
 
+test('keeps every primary control visible in mobile portrait', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const layout = await page.evaluate(() => {
+        const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+        const display = rect('#time-display');
+        const controls = rect('#controls-panel');
+        const reset = rect('#btn-reset');
+        const action = rect('#btn-main-action');
+        return { display, controls, reset, action };
+    });
+
+    expect(layout.display.bottom).toBeLessThanOrEqual(layout.controls.top);
+    expect(layout.reset.left).toBeGreaterThanOrEqual(0);
+    expect(layout.action.right).toBeLessThanOrEqual(390);
+    expect(layout.controls.bottom).toBeLessThanOrEqual(844);
+});
+
 test('offers accessible audio controls and keyboard timer shortcuts', async ({ page }) => {
     await expect(page.locator('#usage-hint')).toBeVisible();
     await page.getByRole('button', { name: '靜音' }).click();

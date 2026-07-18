@@ -43,3 +43,23 @@ test('keeps the desktop display within the viewport while running', async ({ pag
     expect(bounds.top).toBeGreaterThanOrEqual(0);
     expect(bounds.bottom).toBeLessThanOrEqual(1237);
 });
+
+test('offers accessible audio controls and keyboard timer shortcuts', async ({ page }) => {
+    await expect(page.locator('#usage-hint')).toBeVisible();
+    await page.getByRole('button', { name: '靜音' }).click();
+    await expect(page.getByRole('button', { name: '取消靜音' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: '停止音效' }).click();
+
+    await page.locator('body').press('ArrowUp');
+    await expect(page.locator('#time-min')).toHaveText('05');
+    await expect(page.locator('#time-sec')).toHaveText('10');
+});
+
+test('opens and closes the time dialog with keyboard focus support', async ({ page }) => {
+    await page.locator('#time-display').click();
+    await expect(page.getByRole('dialog', { name: '設定時間' })).toBeVisible();
+    await expect(page.locator('#input-min')).toBeFocused();
+    await page.locator('#input-min').press('Escape');
+    await expect(page.getByRole('dialog', { name: '設定時間' })).toBeHidden();
+    await expect(page.locator('#time-display')).toBeFocused();
+});

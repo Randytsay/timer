@@ -89,6 +89,14 @@ export class TimerEngine {
         return this.snapshot();
     }
 
+    finish(now = Date.now()) {
+        this.remainingSeconds = 0;
+        this.endTimestamp = null;
+        this.finishedAt = now;
+        this.status = TIMER_STATUS.FINISHED;
+        return this.snapshot();
+    }
+
     getOvertimeSeconds(now = Date.now()) {
         if (this.status !== TIMER_STATUS.FINISHED || this.finishedAt === null) return 0;
         return Math.max(0, Math.floor((now - this.finishedAt) / 1000));

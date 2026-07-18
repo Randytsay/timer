@@ -196,7 +196,7 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            max-width: calc(100vw - 4rem);
+            max-width: calc(100vw - 6rem);
             white-space: nowrap;
             line-height: 0.9;
         }
@@ -479,10 +479,15 @@
         </div>
     </div>
 
-    <script>
-        const DEFAULT_TIME_SECONDS = 300;
-        const MIN_TIME_SECONDS = 1;
-        const MAX_TIME_SECONDS = 5999;
+    <script type="module">
+        import {
+            DEFAULT_TIME_SECONDS,
+            MIN_TIME_SECONDS,
+            TimerEngine,
+            clampTimerSeconds
+        } from './js/timer-engine.js';
+        import { formatClockParts, formatTimerParts } from './js/time-format.js';
+
         const VALID_AUDIO_MODES = new Set(['default', 'thinking', 'entertainment', 'custom']);
         const VALID_FONT_MODES = new Set(['orbitron', 'bebas', 'michroma', 'jetbrains']);
 
@@ -502,12 +507,15 @@
             wakeLockRequestId: 0,
             wakeLockRequestPromise: null,
             customBuffer: null,
+            timerEngine: new TimerEngine(DEFAULT_TIME_SECONDS),
         };
 
-        function clampTimerSeconds(value, fallback = DEFAULT_TIME_SECONDS) {
-            const seconds = Number(value);
-            if (!Number.isFinite(seconds)) return fallback;
-            return Math.min(MAX_TIME_SECONDS, Math.max(MIN_TIME_SECONDS, Math.round(seconds)));
+        function syncTimerState(snapshot = state.timerEngine.snapshot()) {
+            state.totalSeconds = snapshot.totalSeconds;
+            state.remainingSeconds = snapshot.remainingSeconds;
+            state.endTimestamp = snapshot.endTimestamp;
+            state.status = snapshot.status;
+            return snapshot;
         }
 
         function clearTimerInterval() {
@@ -534,8 +542,7 @@
             let settingsNeedSaving = false;
             const savedTime = localStorage.getItem('tablet_timer_seconds');
             if (savedTime !== null) {
-                state.totalSeconds = clampTimerSeconds(savedTime);
-                state.remainingSeconds = state.totalSeconds;
+                syncTimerState(state.timerEngine.setDuration(savedTime));
                 settingsNeedSaving ||= String(state.totalSeconds) !== savedTime;
             }
 
@@ -562,37 +569,20 @@
         }
 
         function setIdleTimerDuration(seconds) {
-            const nextSeconds = clampTimerSeconds(seconds);
-            state.totalSeconds = nextSeconds;
-            state.remainingSeconds = nextSeconds;
+            syncTimerState(state.timerEngine.setDuration(seconds));
             saveSettings();
             updateDisplay();
         }
 
         function adjustTimerDuration(deltaSeconds) {
-            if (state.status === 'RUNNING' || state.status === 'FINISHED') return;
-
-            const nextTotalSeconds = clampTimerSeconds(state.totalSeconds + deltaSeconds);
-            const appliedDelta = nextTotalSeconds - state.totalSeconds;
-            state.totalSeconds = nextTotalSeconds;
-
-            if (state.status === 'PAUSED') {
-                state.remainingSeconds = Math.min(
-                    state.totalSeconds,
-                    Math.max(MIN_TIME_SECONDS, state.remainingSeconds + appliedDelta)
-                );
-            } else {
-                state.remainingSeconds = state.totalSeconds;
-            }
+            syncTimerState(state.timerEngine.adjustDuration(deltaSeconds));
 
             saveSettings();
             updateDisplay();
         }
 
         function syncRemainingFromDeadline() {
-            if (state.endTimestamp === null) return state.remainingSeconds;
-            const remaining = Math.ceil((state.endTimestamp - Date.now()) / 1000);
-            state.remainingSeconds = Math.max(0, remaining);
+            syncTimerState(state.timerEngine.tick());
             return state.remainingSeconds;
         }
 
@@ -769,8 +759,7 @@
 
 
         function updateDisplay() {
-            const m = Math.floor(state.remainingSeconds / 60).toString().padStart(2, '0');
-            const s = (state.remainingSeconds % 60).toString().padStart(2, '0');
+            const { minutes: m, seconds: s } = formatTimerParts(state.remainingSeconds);
             dom.timeMin.textContent = m;
             dom.timeSec.textContent = s;
 
@@ -940,8 +929,7 @@
 
         function startTimer() {
             if (state.status === 'RUNNING' || state.remainingSeconds <= 0) return;
-            state.status = 'RUNNING';
-            state.endTimestamp = Date.now() + state.remainingSeconds * 1000;
+            syncTimerState(state.timerEngine.start());
             clearTimerInterval();
             audioEngine.init();
             updateControlsUI();
@@ -959,10 +947,8 @@
         }
 
         function pauseTimer() {
-            syncRemainingFromDeadline();
+            syncTimerState(state.timerEngine.pause());
             clearTimerInterval();
-            state.endTimestamp = null;
-            state.status = 'PAUSED';
             audioEngine.stopAll();
             updateControlsUI();
             updateDisplay();
@@ -972,9 +958,7 @@
 
         function resetTimer() {
             clearTimerInterval();
-            state.endTimestamp = null;
-            state.remainingSeconds = state.totalSeconds;
-            state.status = 'IDLE';
+            syncTimerState(state.timerEngine.reset());
             audioEngine.stopAll();
             saveSettings();
             updateControlsUI();
@@ -985,9 +969,7 @@
 
         function finishTimer() {
             clearTimerInterval();
-            state.endTimestamp = null;
-            state.status = 'FINISHED';
-            state.remainingSeconds = 0;
+            syncTimerState(state.timerEngine.finish());
             updateDisplay();
             updateControlsUI();
             showControls();
@@ -997,10 +979,7 @@
 
         // Clock Mode Logic
         function updateClock() {
-            const now = new Date();
-            const h = now.getHours().toString().padStart(2, '0');
-            const m = now.getMinutes().toString().padStart(2, '0');
-            const s = now.getSeconds().toString().padStart(2, '0');
+            const { hours: h, minutes: m, seconds: s } = formatClockParts();
 
             dom.timeHour.textContent = h;
             dom.timeMin.textContent = m;
@@ -1173,8 +1152,7 @@
             dom.btnRestart.addEventListener('click', (e) => {
                 e.stopPropagation();
                 audioEngine.stopAll();
-                state.status = 'IDLE';
-                state.remainingSeconds = state.totalSeconds;
+                syncTimerState(state.timerEngine.reset());
                 updateControlsUI();
                 startTimer();
             });

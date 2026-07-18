@@ -13,7 +13,8 @@ export default [
                 document: 'readonly',
                 navigator: 'readonly',
                 localStorage: 'readonly',
-                FileReader: 'readonly'
+                FileReader: 'readonly',
+                process: 'readonly'
             }
         },
         rules: {

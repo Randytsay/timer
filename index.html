@@ -496,7 +496,9 @@
             fontMode: 'orbitron', // 'orbitron', 'bebas', 'michroma', 'jetbrains'
             displayMode: 'timer', // 'timer' | 'clock'
             clockIntervalId: null,
-            wakeLock: null, // Wake Lock Sentinel
+            wakeLock: null,
+            wakeLockRequestId: 0,
+            wakeLockRequestPromise: null,
             customBuffer: null,
             presets: {
                 thinking: { url: '思考音效.MP3', buffer: null },
@@ -842,32 +844,72 @@
             }
         }
 
+        function shouldKeepScreenAwake() {
+            return state.displayMode === 'clock' || state.status === 'RUNNING';
+        }
+
         // Wake Lock API Implementation
         async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    state.wakeLock = await navigator.wakeLock.request('screen');
-                    console.log('Wake Lock active');
-                }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
-            }
-        }
+            if (!shouldKeepScreenAwake() || !('wakeLock' in navigator)) return null;
+            if (state.wakeLock !== null) return state.wakeLock;
+            if (state.wakeLockRequestPromise !== null) return state.wakeLockRequestPromise;
 
-        function releaseWakeLock() {
-            if (state.wakeLock !== null) {
-                state.wakeLock.release()
-                    .then(() => {
-                        state.wakeLock = null;
-                        console.log('Wake Lock released');
+            const requestId = ++state.wakeLockRequestId;
+            const requestPromise = (async () => {
+                try {
+                    const wakeLock = await navigator.wakeLock.request('screen');
+                    if (requestId !== state.wakeLockRequestId || !shouldKeepScreenAwake()) {
+                        await wakeLock.release();
+                        return null;
+                    }
+
+                    state.wakeLock = wakeLock;
+                    wakeLock.addEventListener('release', () => {
+                        if (state.wakeLock === wakeLock) {
+                            state.wakeLock = null;
+                        }
                     });
+                    console.log('Wake Lock active');
+                    return wakeLock;
+                } catch (err) {
+                    console.warn(`Unable to acquire Wake Lock: ${err.name}, ${err.message}`);
+                    return null;
+                } finally {
+                    if (state.wakeLockRequestPromise === requestPromise) {
+                        state.wakeLockRequestPromise = null;
+                    }
+                }
+            })();
+
+            state.wakeLockRequestPromise = requestPromise;
+            return requestPromise;
+        }
+
+        async function releaseWakeLock() {
+            const wakeLock = state.wakeLock;
+            state.wakeLock = null;
+            state.wakeLockRequestId++;
+            state.wakeLockRequestPromise = null;
+
+            if (wakeLock === null) return;
+            try {
+                await wakeLock.release();
+                console.log('Wake Lock released');
+            } catch (err) {
+                console.warn(`Unable to release Wake Lock: ${err.name}, ${err.message}`);
             }
         }
 
-        // Handle visibility change to re-acquire lock
+        function syncWakeLock() {
+            return shouldKeepScreenAwake() ? requestWakeLock() : releaseWakeLock();
+        }
+
+        // Browsers may release the lock while hidden; request a fresh one only when needed.
         document.addEventListener('visibilitychange', async () => {
-            if (state.wakeLock !== null && document.visibilityState === 'visible') {
-                await requestWakeLock();
+            if (document.visibilityState === 'visible') {
+                await syncWakeLock();
+            } else {
+                await releaseWakeLock();
             }
         });
 
@@ -880,7 +922,7 @@
             updateControlsUI();
             updateDisplay();
             hideControls(); // 開始後自動隱藏控制列
-            requestWakeLock(); // Request Wake Lock
+            syncWakeLock();
 
             state.intervalId = setInterval(() => {
                 syncRemainingFromDeadline();
@@ -899,7 +941,7 @@
             updateControlsUI();
             updateDisplay();
             showControls(); // 暫停時自動顯示控制列
-            releaseWakeLock(); // Release Wake Lock on pause
+            syncWakeLock();
         }
 
         function resetTimer() {
@@ -911,7 +953,7 @@
             updateControlsUI();
             updateDisplay();
             showControls();
-            releaseWakeLock(); // Release Wake Lock logic handled here implicitly as it's not runnign
+            syncWakeLock();
         }
 
         function finishTimer() {
@@ -923,7 +965,7 @@
             updateControlsUI();
             showControls();
             audioEngine.playAlarm();
-            releaseWakeLock(); // Release Wake Lock when done
+            syncWakeLock();
         }
 
         // Clock Mode Logic
@@ -960,7 +1002,7 @@
                 切換倒數
             `;
 
-            requestWakeLock(); // Keep screen on in clock mode
+            syncWakeLock();
         }
 
         function stopClock() {
@@ -981,7 +1023,7 @@
                 </svg>
                 切換時鐘
             `;
-            releaseWakeLock();
+            syncWakeLock();
         }
 
         function toggleMode() {

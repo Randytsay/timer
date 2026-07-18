@@ -533,20 +533,33 @@
         }
 
         function loadSettings() {
+            let settingsNeedSaving = false;
             const savedTime = localStorage.getItem('tablet_timer_seconds');
             if (savedTime !== null) {
                 state.totalSeconds = clampTimerSeconds(savedTime);
                 state.remainingSeconds = state.totalSeconds;
+                settingsNeedSaving ||= String(state.totalSeconds) !== savedTime;
             }
 
             const savedAudioMode = localStorage.getItem('tablet_timer_audio_mode');
             if (VALID_AUDIO_MODES.has(savedAudioMode)) {
-                state.audioMode = savedAudioMode;
+                // File uploads are not persisted in localStorage, so a custom selection
+                // cannot be restored after reload without a matching decoded buffer.
+                state.audioMode = savedAudioMode === 'custom' ? 'default' : savedAudioMode;
+                settingsNeedSaving ||= state.audioMode !== savedAudioMode;
+            } else if (savedAudioMode !== null) {
+                settingsNeedSaving = true;
             }
 
             const savedFontMode = localStorage.getItem('tablet_timer_font_mode');
             if (VALID_FONT_MODES.has(savedFontMode)) {
                 state.fontMode = savedFontMode;
+            } else if (savedFontMode !== null) {
+                settingsNeedSaving = true;
+            }
+
+            if (settingsNeedSaving) {
+                saveSettings();
             }
         }
 
@@ -618,15 +631,37 @@
         const audioEngine = {
             ctx: null,
             reverbNode: null,
+            activeSources: new Set(),
 
             async init() {
-                if (!this.ctx) {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    this.reverbNode = await this.createReverb();
+                try {
+                    if (!this.ctx) {
+                        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioContextClass) throw new Error('Web Audio is not supported');
+                        this.ctx = new AudioContextClass();
+                        this.reverbNode = await this.createReverb();
+                    }
+                    if (this.ctx.state === 'suspended') {
+                        await this.ctx.resume();
+                    }
+                    return true;
+                } catch (err) {
+                    console.warn(`Unable to initialize audio: ${err.message}`);
+                    return false;
                 }
-                if (this.ctx.state === 'suspended') {
-                    this.ctx.resume();
-                }
+            },
+
+            trackSource(source) {
+                this.activeSources.add(source);
+                source.addEventListener('ended', () => this.activeSources.delete(source), { once: true });
+                return source;
+            },
+
+            stopAll() {
+                this.activeSources.forEach(source => {
+                    try { source.stop(); } catch (err) { /* Source may already be stopped. */ }
+                });
+                this.activeSources.clear();
             },
 
             async createReverb() {
@@ -644,8 +679,8 @@
                 return convolver;
             },
 
-            playBeep() {
-                this.init();
+            async playBeep() {
+                if (!(await this.init())) return;
                 const t = this.ctx.currentTime;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
@@ -661,20 +696,14 @@
                 osc.connect(gain);
                 gain.connect(this.reverbNode || this.ctx.destination);
 
+                this.trackSource(osc);
                 osc.start(t);
                 osc.stop(t + 0.1);
             },
 
-            currentSource: null, // Track playing source for preview/stop
-
             async playAlarm() {
-                await this.init();
-
-                // Stop previous sound if playing
-                if (this.currentSource) {
-                    try { this.currentSource.stop(); } catch (e) { }
-                    this.currentSource = null;
-                }
+                if (!(await this.init())) return;
+                this.stopAll();
 
                 // 處理自訂與預設 MP3
                 let bufferToPlay = null;
@@ -686,10 +715,11 @@
                     if (!preset.buffer) {
                         try {
                             const response = await fetch(preset.url);
+                            if (!response.ok) throw new Error(`HTTP ${response.status}`);
                             const arrayBuffer = await response.arrayBuffer();
                             preset.buffer = await this.ctx.decodeAudioData(arrayBuffer);
                         } catch (e) {
-                            console.error("Failed to load preset audio", e);
+                            console.warn('Failed to load preset audio; using the default chord instead.', e);
                         }
                     }
                     bufferToPlay = preset.buffer;
@@ -699,24 +729,14 @@
                     const source = this.ctx.createBufferSource();
                     source.buffer = bufferToPlay;
                     source.connect(this.reverbNode || this.ctx.destination);
+                    this.trackSource(source);
                     source.start(0);
-                    this.currentSource = source;
-
-                    // Auto stop preview after 5s if IDLE (optional, but good UX)
-                    if (state.status === 'IDLE') {
-                        source.onended = () => { this.currentSource = null; };
-                    }
                     return;
                 }
 
                 // 否則播放預設和弦
                 const t = this.ctx.currentTime;
                 const freqs = [261.63, 329.63, 392.00, 523.25]; // C-E-G-C (C Major Chord)
-
-                // Simple oscillator management for chord not implemented for stop(), 
-                // but usually short enough. For consistent preview, we just play it.
-                // Or we can create a gain node to mute it. 
-                // For simplicity, we assume generic beep/chord is short.
 
                 freqs.forEach((f, i) => {
                     const osc = this.ctx.createOscillator();
@@ -738,6 +758,7 @@
                     filter.connect(gain);
                     gain.connect(this.reverbNode || this.ctx.destination);
 
+                    this.trackSource(osc);
                     osc.start(t);
                     osc.stop(t + 3);
                 });
@@ -874,15 +895,17 @@
                 } catch (err) {
                     console.warn(`Unable to acquire Wake Lock: ${err.name}, ${err.message}`);
                     return null;
-                } finally {
-                    if (state.wakeLockRequestPromise === requestPromise) {
-                        state.wakeLockRequestPromise = null;
-                    }
                 }
             })();
 
             state.wakeLockRequestPromise = requestPromise;
-            return requestPromise;
+            try {
+                return await requestPromise;
+            } finally {
+                if (state.wakeLockRequestPromise === requestPromise) {
+                    state.wakeLockRequestPromise = null;
+                }
+            }
         }
 
         async function releaseWakeLock() {
@@ -938,6 +961,7 @@
             clearTimerInterval();
             state.endTimestamp = null;
             state.status = 'PAUSED';
+            audioEngine.stopAll();
             updateControlsUI();
             updateDisplay();
             showControls(); // 暫停時自動顯示控制列
@@ -949,6 +973,7 @@
             state.endTimestamp = null;
             state.remainingSeconds = state.totalSeconds;
             state.status = 'IDLE';
+            audioEngine.stopAll();
             saveSettings();
             updateControlsUI();
             updateDisplay();
@@ -1007,6 +1032,7 @@
 
         function stopClock() {
             clearClockInterval();
+            audioEngine.stopAll();
             dom.timeHour.classList.add('hidden-force');
             dom.timeSepHour.classList.add('hidden-force');
             dom.display.classList.remove('clock-mode-text'); // Remove Smaller Font Class
@@ -1144,6 +1170,7 @@
 
             dom.btnRestart.addEventListener('click', (e) => {
                 e.stopPropagation();
+                audioEngine.stopAll();
                 state.status = 'IDLE';
                 state.remainingSeconds = state.totalSeconds;
                 updateControlsUI();
@@ -1158,26 +1185,29 @@
             // 音效切換
             dom.btnSoundDefault.addEventListener('click', (e) => {
                 e.stopPropagation();
+                audioEngine.stopAll();
                 state.audioMode = 'default';
                 audioEngine.playBeep();
                 updateControlsUI();
-                localStorage.setItem('tablet_timer_audio_mode', 'default');
+                saveSettings();
             });
 
             dom.btnSoundThinking.addEventListener('click', (e) => {
                 e.stopPropagation();
+                audioEngine.stopAll();
                 state.audioMode = 'thinking';
                 audioEngine.playAlarm(); // Preview Sound
                 updateControlsUI();
-                localStorage.setItem('tablet_timer_audio_mode', 'thinking');
+                saveSettings();
             });
 
             dom.btnSoundEntertainment.addEventListener('click', (e) => {
                 e.stopPropagation();
+                audioEngine.stopAll();
                 state.audioMode = 'entertainment';
                 audioEngine.playAlarm(); // Preview Sound
                 updateControlsUI();
-                localStorage.setItem('tablet_timer_audio_mode', 'entertainment');
+                saveSettings();
             });
 
             dom.btnSoundCustom.addEventListener('click', (e) => {
@@ -1190,14 +1220,18 @@
                 if (file) {
                     const reader = new FileReader();
                     reader.onload = async (ev) => {
-                        await audioEngine.init();
-                        audioEngine.ctx.decodeAudioData(ev.target.result, (buffer) => {
+                        if (!(await audioEngine.init())) return;
+                        try {
+                            audioEngine.stopAll();
+                            const buffer = await audioEngine.ctx.decodeAudioData(ev.target.result);
                             state.customBuffer = buffer;
                             state.audioMode = 'custom';
                             updateControlsUI();
-                            localStorage.setItem('tablet_timer_audio_mode', 'custom');
+                            saveSettings();
                             audioEngine.playAlarm(); // Preview Sound
-                        });
+                        } catch (err) {
+                            console.warn('Unable to decode custom audio.', err);
+                        }
                     };
                     reader.readAsArrayBuffer(file);
                 }
@@ -1210,7 +1244,7 @@
                     state.fontMode = btn.dataset.font;
                     audioEngine.playBeep();
                     updateControlsUI();
-                    localStorage.setItem('tablet_timer_font_mode', state.fontMode);
+                    saveSettings();
                 });
             });
 
@@ -1284,8 +1318,6 @@
             updateDisplay();
             updateControlsUI();
             bindEvents();
-            // 預先初始化音效引擎（生成空間殘響）
-            audioEngine.init();
         }
 
         init();

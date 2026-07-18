@@ -293,6 +293,19 @@
                 top: calc(50% + 24vh);
             }
 
+            #finished-controls {
+                position: fixed;
+                bottom: 1rem;
+                padding: 0 0.75rem;
+                gap: 0.5rem;
+                z-index: 30;
+            }
+
+            #finished-controls button {
+                padding: 0.7rem 0.8rem;
+                font-size: 0.9rem;
+            }
+
             .btn-glass {
                 padding: 0.5rem 0.75rem;
                 font-size: 0.8rem;
@@ -600,27 +613,30 @@
             <input type="file" id="audio-upload" accept="audio/*" class="hidden">
         </div>
 
-        <!-- 時間到專用按鈕 -->
-        <div id="finished-controls"
-            class="hidden-force flex items-center gap-6 w-full justify-center absolute bottom-12 left-0">
-            <button id="btn-stop-alarm"
-                class="btn-glass px-6 py-4 rounded-2xl text-lg font-bold text-cyan-100 border-cyan-800/50">停止音效</button>
-            <button id="btn-back-settings"
-                class="btn-glass px-8 py-4 rounded-2xl text-xl font-bold flex items-center gap-3 text-gray-300 border-gray-600">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                返回
-            </button>
-            <button id="btn-restart"
-                class="bg-red-600 hover:bg-red-500 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-[0_0_20px_rgba(220,38,38,0.6)] flex items-center gap-3">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <path d="M23 4v6h-6" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                重來
-            </button>
-        </div>
+    </div>
+
+    </div>
+
+    <!-- 時間到專用按鈕：置於控制面板之外，收合面板時仍可在點擊後顯示。 -->
+    <div id="finished-controls"
+        class="hidden-force flex items-center gap-6 w-full justify-center absolute bottom-12 left-0 z-30">
+        <button id="btn-stop-alarm"
+            class="btn-glass px-6 py-4 rounded-2xl text-lg font-bold text-cyan-100 border-cyan-800/50">停止音效</button>
+        <button id="btn-back-settings"
+            class="btn-glass px-8 py-4 rounded-2xl text-xl font-bold flex items-center gap-3 text-gray-300 border-gray-600">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            返回
+        </button>
+        <button id="btn-restart"
+            class="bg-red-600 hover:bg-red-500 text-white px-10 py-4 rounded-2xl text-xl font-bold shadow-[0_0_20px_rgba(220,38,38,0.6)] flex items-center gap-3">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            重來
+        </button>
     </div>
 
     <div id="app-message" class="hidden-force" role="status" aria-live="polite"></div>
@@ -677,6 +693,7 @@
             overtimeIntervalId: null,
             status: 'IDLE',
             isControlsVisible: true,
+            isFinishedControlsVisible: false,
             audioContext: null,
             audioMode: 'default', // 'default', 'thinking', 'entertainment', 'custom'
             fontMode: 'orbitron', // 'orbitron', 'bebas', 'michroma', 'jetbrains'
@@ -1082,8 +1099,9 @@
             if (state.status === 'FINISHED') {
                 dom.setupControls.classList.add('hidden-force');
                 dom.mainActionBtn.parentElement.classList.add('hidden-force');
-                dom.finishedControls.classList.remove('hidden-force');
+                dom.finishedControls.classList.toggle('hidden-force', !state.isFinishedControlsVisible);
             } else {
+                state.isFinishedControlsVisible = false;
                 dom.finishedControls.classList.add('hidden-force');
                 dom.mainActionBtn.parentElement.classList.remove('hidden-force');
             }
@@ -1206,9 +1224,10 @@
             clearTimerInterval();
             // tick() 已在精確 endTimestamp 設定 finishedAt，不能在此覆寫。
             if (state.status !== 'FINISHED') syncTimerState(state.timerEngine.finish());
+            state.isFinishedControlsVisible = false;
             updateDisplay();
             updateControlsUI();
-            showControls();
+            hideControls();
             startOvertimeInterval();
             audioEngine.playAlarm({ repeat: true });
             syncWakeLock();
@@ -1291,7 +1310,8 @@
 
         function toggleControls() {
             if (state.status === 'FINISHED') {
-                showControls();
+                state.isFinishedControlsVisible = !state.isFinishedControlsVisible;
+                updateControlsUI();
                 return;
             }
             state.isControlsVisible ? hideControls() : showControls();
@@ -1300,17 +1320,17 @@
         function hideControls() {
             state.isControlsVisible = false;
             dom.controlsPanel.classList.add('controls-hidden');
-            dom.container.classList.toggle('timer-focused', state.displayMode === 'timer' && state.status === 'RUNNING');
-            // 控制列收起時保持字體比例，避免與執行中縮放疊加而裁切數字。
-            dom.container.style.transform = 'scale(1)';
+            dom.container.classList.toggle('timer-focused', state.displayMode === 'timer' && ['RUNNING', 'FINISHED'].includes(state.status));
+            // 不設定 transform，讓完成後的 fixed 操作列相對於真正的 viewport 定位。
+            dom.container.style.transform = '';
         }
 
         function showControls() {
             state.isControlsVisible = true;
             dom.controlsPanel.classList.remove('controls-hidden');
             dom.container.classList.remove('timer-focused');
-            // 恢復原始比例，同樣保持置中
-            dom.container.style.transform = 'scale(1)';
+            // 保持原始比例與 viewport 定位。
+            dom.container.style.transform = '';
         }
 
         let messageTimer = null;

@@ -71,6 +71,8 @@ test('centers the running display on phone viewports and keeps counting overtime
 
     await expect(page.locator('#time-min')).toHaveText('-00', { timeout: 4_000 });
     await expect(page.locator('#time-sec')).toHaveText('01', { timeout: 2_500 });
+    await expect(page.getByRole('button', { name: '停止音效' })).toBeHidden();
+    await page.locator('#main-container').click();
     await expect(page.getByRole('button', { name: '停止音效' })).toBeVisible();
     await page.getByRole('button', { name: '停止音效' }).click();
 });

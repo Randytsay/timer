@@ -12,7 +12,7 @@ test('changes duration, starts, pauses, and resets a countdown', async ({ page }
     await page.locator('#btn-main-action').click();
     await expect(page.locator('#icon-pause')).not.toHaveClass(/hidden-force/);
 
-    await page.locator('#btn-main-action').click();
+    await page.locator('body').press('Space');
     await expect(page.locator('#icon-play')).not.toHaveClass(/hidden-force/);
 
     await page.getByRole('button', { name: '重置' }).click();
@@ -21,15 +21,16 @@ test('changes duration, starts, pauses, and resets a countdown', async ({ page }
 });
 
 test('switches between countdown and clock modes', async ({ page }) => {
-    await page.getByRole('button', { name: '切換時鐘' }).click();
-    await expect(page.getByRole('button', { name: '切換倒數' })).toBeVisible();
+    await page.locator('#btn-mode-toggle').click();
+    await expect(page.locator('#btn-mode-toggle')).toContainText('切換倒數');
     await expect(page.locator('#time-hour')).not.toHaveClass(/hidden-force/);
 
-    await page.getByRole('button', { name: '切換倒數' }).click();
-    await expect(page.getByRole('button', { name: '切換時鐘' })).toBeVisible();
+    await page.locator('#btn-mode-toggle').click();
+    await expect(page.locator('#btn-mode-toggle')).toContainText('切換時鐘');
 });
 
 test('selects every built-in sound and display font', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) < 769, 'Secondary settings are intentionally inside the mobile drawer.');
     for (const sound of ['和弦', '思考', '綜藝']) {
         await page.getByRole('button', { name: sound }).click();
         await expect(page.getByRole('button', { name: sound })).toHaveClass(/ring-cyan-500\/50/);
@@ -44,6 +45,44 @@ test('selects every built-in sound and display font', async ({ page }) => {
     for (const [font, className] of Object.entries(fontClasses)) {
         await page.getByRole('button', { name: font }).click();
         await expect(page.locator('#time-display')).toHaveClass(new RegExp(className));
+    }
+});
+
+test('does not start a hidden timer when Space is pressed in clock mode', async ({ page }) => {
+    await page.locator('#btn-mode-toggle').click();
+    await page.locator('body').press('Space');
+    await expect(page.locator('#time-hour')).not.toHaveClass(/hidden-force/);
+    await expect(page.locator('#btn-main-action')).toHaveClass(/hidden-force/);
+});
+
+test('fits page, primary controls, and modal in the active viewport', async ({ page }) => {
+    const layout = await page.evaluate(() => {
+        const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+        return { width: window.innerWidth, height: window.innerHeight, scrollWidth: document.documentElement.scrollWidth,
+            display: rect('#time-display'), reset: rect('#btn-reset'), action: rect('#btn-main-action'), mode: rect('#btn-mode-toggle'),
+            quickControls: [...document.querySelectorAll('#btn-minus, .quick-add, #btn-plus')].map((element) => element.getBoundingClientRect()) };
+    });
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
+    for (const element of [layout.display, layout.reset, layout.action, layout.mode]) {
+        expect(element.left).toBeGreaterThanOrEqual(0);
+        expect(element.right).toBeLessThanOrEqual(layout.width);
+    }
+    for (const control of layout.quickControls) {
+        expect(control.left).toBeGreaterThanOrEqual(0);
+        expect(control.right).toBeLessThanOrEqual(layout.width);
+    }
+    await page.locator('#time-display').click();
+    const modal = await page.locator('#input-modal > div').evaluate((element) => element.getBoundingClientRect());
+    expect(modal.left).toBeGreaterThanOrEqual(0);
+    expect(modal.right).toBeLessThanOrEqual(layout.width);
+    expect(modal.bottom).toBeLessThanOrEqual(layout.height);
+
+    const inputs = await page.locator('#input-min, #input-sec').evaluateAll((elements) =>
+        elements.map((element) => element.getBoundingClientRect())
+    );
+    for (const input of inputs) {
+        expect(input.left).toBeGreaterThanOrEqual(0);
+        expect(input.right).toBeLessThanOrEqual(layout.width);
     }
 });
 
@@ -62,7 +101,8 @@ test('keeps the desktop display within the viewport while running', async ({ pag
     expect(bounds.bottom).toBeLessThanOrEqual(1237);
 });
 
-test('keeps every primary control visible in mobile portrait', async ({ page }) => {
+test('keeps every primary control visible in mobile portrait', async ({ page }, testInfo) => {
+    test.skip(!['iphone-se', 'iphone-13', 'pixel-7'].includes(testInfo.project.name), 'This assertion targets phone-sized portrait viewports.');
     await page.setViewportSize({ width: 390, height: 844 });
     const layout = await page.evaluate(() => {
         const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
@@ -79,7 +119,21 @@ test('keeps every primary control visible in mobile portrait', async ({ page }) 
     expect(layout.controls.bottom).toBeLessThanOrEqual(844);
 });
 
+test('expands and collapses secondary settings on phone-sized viewports', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) >= 769, 'The drawer is only collapsed by default on phones.');
+    const drawer = page.locator('#settings-drawer');
+    const summary = drawer.locator('summary');
+
+    await expect(drawer).not.toHaveAttribute('open', '');
+    await summary.click();
+    await expect(drawer).toHaveAttribute('open', '');
+    await expect(page.locator('#sound-selector')).toBeVisible();
+    await summary.click();
+    await expect(drawer).not.toHaveAttribute('open', '');
+});
+
 test('offers accessible audio controls and keyboard timer shortcuts', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) < 769, 'Secondary settings are inside the mobile drawer.');
     await expect(page.locator('#usage-hint')).toBeVisible();
     await page.getByRole('button', { name: '靜音' }).click();
     await expect(page.getByRole('button', { name: '取消靜音' })).toHaveAttribute('aria-pressed', 'true');
@@ -97,4 +151,8 @@ test('opens and closes the time dialog with keyboard focus support', async ({ pa
     await page.locator('#input-min').press('Escape');
     await expect(page.getByRole('dialog', { name: '設定時間' })).toBeHidden();
     await expect(page.locator('#time-display')).toBeFocused();
+});
+
+test('captures the responsive reference view', async ({ page }, testInfo) => {
+    await page.screenshot({ path: testInfo.outputPath('viewport.png') });
 });

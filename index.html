@@ -186,8 +186,8 @@
 
         /* 讓計時數字最大化且置中 */
         #time-display {
-            font-size: min(25vw, 65vh);
-            /* 縮小以防止溢出 */
+            font-size: min(20vw, 42vh);
+            /* 為完整的 MM:SS 保留全螢幕安全邊界 */
             font-variant-numeric: tabular-nums;
             /* 強制等寬數字，防止寬度跳動 */
             font-feature-settings: "tnum";
@@ -196,7 +196,9 @@
             justify-content: center;
             align-items: center;
             width: 100%;
+            max-width: calc(100vw - 4rem);
             white-space: nowrap;
+            line-height: 0.9;
         }
 
         /* 直向模式優化：分在上、秒在下 */
@@ -218,7 +220,7 @@
 
         /* 計時中的縮放效果 - 稍微縮小 scale 避免溢出 */
         .display-running {
-            transform: scale(1.05);
+            transform: scale(1.02);
         }
 
         /* 時鐘模式：稍微縮小字體以容納 HH:MM:SS */
@@ -500,10 +502,6 @@
             wakeLockRequestId: 0,
             wakeLockRequestPromise: null,
             customBuffer: null,
-            presets: {
-                thinking: { url: '思考音效.MP3', buffer: null },
-                entertainment: { url: '時間綜藝.MP3', buffer: null }
-            }
         };
 
         function clampTimerSeconds(value, fallback = DEFAULT_TIME_SECONDS) {
@@ -664,6 +662,50 @@
                 this.activeSources.clear();
             },
 
+            playTone({ frequency, startOffset = 0, duration = 1, type = 'sine', volume = 0.12 }) {
+                const startTime = this.ctx.currentTime + startOffset;
+                const oscillator = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, startTime);
+                gain.gain.setValueAtTime(0.0001, startTime);
+                gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.025);
+                gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+                oscillator.connect(gain);
+                gain.connect(this.reverbNode || this.ctx.destination);
+                this.trackSource(oscillator);
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration + 0.03);
+            },
+
+            playBuiltInAlarm(mode) {
+                const patterns = {
+                    // 清晰、短促的開場鐘聲，適合立即確認操作與時間到提示。
+                    default: [
+                        { frequency: 880, duration: 1.4, type: 'sine', volume: 0.16 },
+                        { frequency: 1320, startOffset: 0.04, duration: 1.2, type: 'sine', volume: 0.1 },
+                        { frequency: 1760, startOffset: 0.08, duration: 0.9, type: 'triangle', volume: 0.06 }
+                    ],
+                    // 柔和上行的思考提示，和開場鐘聲保持明顯區隔。
+                    thinking: [
+                        { frequency: 523.25, duration: 0.75, type: 'sine', volume: 0.1 },
+                        { frequency: 659.25, startOffset: 0.22, duration: 0.8, type: 'sine', volume: 0.1 },
+                        { frequency: 783.99, startOffset: 0.44, duration: 1.1, type: 'triangle', volume: 0.09 }
+                    ],
+                    // 節奏更快、明亮的綜藝提示音。
+                    entertainment: [
+                        { frequency: 523.25, duration: 0.28, type: 'triangle', volume: 0.14 },
+                        { frequency: 659.25, startOffset: 0.16, duration: 0.28, type: 'triangle', volume: 0.14 },
+                        { frequency: 783.99, startOffset: 0.32, duration: 0.28, type: 'triangle', volume: 0.14 },
+                        { frequency: 1046.5, startOffset: 0.48, duration: 0.85, type: 'sine', volume: 0.14 }
+                    ]
+                };
+
+                (patterns[mode] || patterns.default).forEach(tone => this.playTone(tone));
+            },
+
             async createReverb() {
                 const len = this.ctx.sampleRate * 1.5;
                 const buffer = this.ctx.createBuffer(2, len, this.ctx.sampleRate);
@@ -705,24 +747,11 @@
                 if (!(await this.init())) return;
                 this.stopAll();
 
-                // 處理自訂與預設 MP3
+                // 自訂音效保留原檔播放；內建音效使用三組可停止的合成提示音。
                 let bufferToPlay = null;
 
                 if (state.audioMode === 'custom' && state.customBuffer) {
                     bufferToPlay = state.customBuffer;
-                } else if (state.audioMode === 'thinking' || state.audioMode === 'entertainment') {
-                    const preset = state.presets[state.audioMode];
-                    if (!preset.buffer) {
-                        try {
-                            const response = await fetch(preset.url);
-                            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                            const arrayBuffer = await response.arrayBuffer();
-                            preset.buffer = await this.ctx.decodeAudioData(arrayBuffer);
-                        } catch (e) {
-                            console.warn('Failed to load preset audio; using the default chord instead.', e);
-                        }
-                    }
-                    bufferToPlay = preset.buffer;
                 }
 
                 if (bufferToPlay) {
@@ -734,34 +763,7 @@
                     return;
                 }
 
-                // 否則播放預設和弦
-                const t = this.ctx.currentTime;
-                const freqs = [261.63, 329.63, 392.00, 523.25]; // C-E-G-C (C Major Chord)
-
-                freqs.forEach((f, i) => {
-                    const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    const filter = this.ctx.createBiquadFilter();
-
-                    osc.type = i % 2 === 0 ? 'triangle' : 'sine';
-                    osc.frequency.setValueAtTime(f, t);
-
-                    filter.type = 'lowpass';
-                    filter.frequency.setValueAtTime(2000, t);
-                    filter.frequency.exponentialRampToValueAtTime(500, t + 2);
-
-                    gain.gain.setValueAtTime(0, t);
-                    gain.gain.linearRampToValueAtTime(0.15, t + 0.2);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + 2.5);
-
-                    osc.connect(filter);
-                    filter.connect(gain);
-                    gain.connect(this.reverbNode || this.ctx.destination);
-
-                    this.trackSource(osc);
-                    osc.start(t);
-                    osc.stop(t + 3);
-                });
+                this.playBuiltInAlarm(state.audioMode);
             }
         };
 
@@ -1079,8 +1081,8 @@
         function hideControls() {
             state.isControlsVisible = false;
             dom.controlsPanel.classList.add('controls-hidden');
-            // 移除原本的 translateY(10vh)，確保在全螢幕時絕對置中
-            dom.container.style.transform = 'scale(1.1)';
+            // 控制列收起時保持字體比例，避免與執行中縮放疊加而裁切數字。
+            dom.container.style.transform = 'scale(1)';
         }
 
         function showControls() {
@@ -1187,7 +1189,7 @@
                 e.stopPropagation();
                 audioEngine.stopAll();
                 state.audioMode = 'default';
-                audioEngine.playBeep();
+                audioEngine.playAlarm();
                 updateControlsUI();
                 saveSettings();
             });

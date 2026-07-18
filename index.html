@@ -430,6 +430,16 @@
             #time-display { font-size: min(20vw, 42vh); }
         }
 
+        @media (min-width: 769px) and (max-width: 1024px) {
+            #btn-mode-toggle {
+                position: fixed;
+                right: 1rem;
+                top: 1rem;
+                bottom: auto;
+                left: auto;
+            }
+        }
+
         #input-modal > div { width: min(500px, calc(100vw - 2rem)); }
         #settings-drawer > summary { display: none; }
         #app-message {
